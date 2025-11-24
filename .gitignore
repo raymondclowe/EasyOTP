@@ -205,3 +205,7 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# EasyOTP specific
+test_basic.py
+.easyotp/
