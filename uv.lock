@@ -323,10 +323,10 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "cryptography", specifier = ">=42.0.0" },
+    { name = "cryptography", specifier = ">=42.0.4" },
     { name = "flet", specifier = ">=0.24.0" },
-    { name = "opencv-python", specifier = ">=4.8.0" },
-    { name = "pillow", specifier = ">=10.0.0" },
+    { name = "opencv-python", specifier = ">=4.8.1.78" },
+    { name = "pillow", specifier = ">=10.3.0" },
     { name = "pyotp", specifier = ">=2.9.0" },
     { name = "pyperclip", specifier = ">=1.9.0" },
     { name = "pyzbar", specifier = ">=0.1.9" },
