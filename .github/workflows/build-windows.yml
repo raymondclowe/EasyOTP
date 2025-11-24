@@ -12,6 +12,9 @@ on:
 jobs:
   build-windows:
     runs-on: windows-latest
+    permissions:
+      contents: write  # Needed for creating releases
+      actions: read    # Needed for workflow operations
     
     steps:
     - uses: actions/checkout@v4

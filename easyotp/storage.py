@@ -3,6 +3,7 @@ import json
 import os
 import platform
 import subprocess
+import base64
 from pathlib import Path
 from typing import List, Dict, Optional
 from cryptography.fernet import Fernet
@@ -101,7 +102,11 @@ class Storage:
         # Combine HWID and username as the basis for the key
         password = f"{hwid}:{username}".encode()
         
-        # Use a fixed salt (this is acceptable since the password itself is machine+user specific)
+        # Use a fixed salt. This is acceptable because:
+        # 1. The password itself (HWID:username) is already machine+user specific
+        # 2. We want deterministic key generation so the same machine/user always gets the same key
+        # 3. The primary security comes from the unique HWID+username combination
+        # 4. This is for local storage encryption, not transmitted passwords
         salt = b"easyotp_salt_v1"
         
         # Derive a key using PBKDF2
@@ -114,7 +119,6 @@ class Storage:
         key = kdf.derive(password)
         
         # Convert to Fernet-compatible format
-        import base64
         return base64.urlsafe_b64encode(key)
     
     def load_items(self) -> List[OTPItem]:

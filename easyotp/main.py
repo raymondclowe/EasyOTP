@@ -502,10 +502,24 @@ class EasyOTPApp:
     def _start_timer_thread(self):
         """Start a background thread to update codes."""
         def update_codes():
+            last_period = -1
             while True:
+                # Get current 30-second period
+                current_period = int(time.time()) // 30
+                
+                # Only update when we enter a new 30-second period
+                if current_period != last_period:
+                    last_period = current_period
+                    for list_item in self.list_items:
+                        list_item.update_code()
+                
+                # Update timer display every second
                 time.sleep(1)
                 for list_item in self.list_items:
-                    list_item.update_code()
+                    # Only update the timer text, not the code
+                    list_item.timer_text.value = f"{OTPGenerator.get_remaining_seconds()}s"
+                    if list_item.page:
+                        list_item.timer_text.update()
         
         thread = threading.Thread(target=update_codes, daemon=True)
         thread.start()
