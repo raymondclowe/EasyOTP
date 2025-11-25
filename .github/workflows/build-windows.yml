@@ -42,6 +42,8 @@ jobs:
         New-Item -ItemType directory -Path certificate
         Set-Content -Path certificate\certificate.txt -Value "${{ secrets.CERT_PFX }}"
         certutil -decode certificate\certificate.txt certificate\certificate.pfx
+        Write-Host "Decoded PFX file size: $((Get-Item certificate\certificate.pfx).Length) bytes"
+        certutil -dump certificate\certificate.pfx | Select-Object -First 20
 
     - name: Find and use signtool
       env:
@@ -49,6 +51,9 @@ jobs:
       run: |
         $signtool = Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits\10\bin\*\x64\signtool.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
         if ($signtool) {
+          Write-Host "Using signtool at: $($signtool.FullName)"
+          Write-Host "PFX file exists: $(Test-Path certificate\certificate.pfx)"
+          Write-Host "Password length: $($env:CERT_PASSWORD.Length)"
           & $signtool.FullName sign /f certificate\certificate.pfx /p $env:CERT_PASSWORD /fd SHA256 /tr http://timestamp.digicert.com /td sha256 dist\EasyOTP.exe
         } else {
           Write-Error "signtool not found"
