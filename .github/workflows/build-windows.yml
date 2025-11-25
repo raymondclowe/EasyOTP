@@ -39,7 +39,8 @@ jobs:
     
     - name: Decode certificate
       run: |
-        echo ${{ secrets.CERT_PFX }} | base64 -d > cert.pfx
+        $pfx = [Convert]::FromBase64String("${{ secrets.CERT_PFX }}")
+        [IO.File]::WriteAllBytes("cert.pfx", $pfx)
     
     - name: Sign the executable
       run: |
