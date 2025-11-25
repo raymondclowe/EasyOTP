@@ -6,9 +6,9 @@ import threading
 from typing import List, Optional
 from pathlib import Path
 
-from .storage import Storage, OTPItem
-from .otp import OTPGenerator
-from .qr_scanner import QRScanner
+from easyotp.storage import Storage, OTPItem
+from easyotp.otp import OTPGenerator
+from easyotp.qr_scanner import QRScanner
 from easyotp.qr_scanner import PYZBAR_AVAILABLE
 
 
@@ -187,6 +187,8 @@ class EasyOTPApp:
     
     def _setup_ui(self):
         """Set up the user interface."""
+        import easyotp
+        self._version = getattr(easyotp, "__version__", "unknown")
         # Top bar with search and buttons
         top_bar = ft.Row(
             controls=[
@@ -200,6 +202,7 @@ class EasyOTPApp:
                     items=[
                         ft.PopupMenuItem(text="Export", on_click=self._export_items),
                         ft.PopupMenuItem(text="Import", on_click=self._import_items),
+                        ft.PopupMenuItem(text="About", on_click=self._show_about_dialog),
                     ]
                 )
             ],
@@ -218,6 +221,21 @@ class EasyOTPApp:
         )
         
         self.page.add(content)
+    
+    def _show_about_dialog(self, e=None):
+        """Show About dialog with version and GitHub link."""
+        dialog = ft.AlertDialog(
+            title=ft.Text("About EasyOTP"),
+            content=ft.Column([
+                ft.Text(f"Version: {self._version}"),
+                ft.Text("GitHub: ", size=14),
+                ft.TextButton("https://github.com/raymondclowe/EasyOTP", url="https://github.com/raymondclowe/EasyOTP", style=ft.ButtonStyle(color=ft.colors.BLUE)),
+            ], tight=True, spacing=8),
+            actions=[ft.TextButton("Close", on_click=lambda _: self._close_dialog(dialog))]
+        )
+        self.page.dialog = dialog
+        dialog.open = True
+        self.page.update()
     
     def _load_items(self):
         """Load OTP items from storage."""
