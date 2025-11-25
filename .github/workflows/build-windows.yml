@@ -37,15 +37,13 @@ jobs:
       run: |
         uv run pyinstaller --name=EasyOTP --onefile --windowed --icon=NONE easyotp/main.py
     
-    - name: Install Windows SDK for signtool
-      run: choco install windows-sdk-10.1
-    
     - name: Decode certificate
       run: |
         echo ${{ secrets.CERT_PFX }} | base64 -d > cert.pfx
-
+    
     - name: Sign the executable
-      run: signtool sign /f cert.pfx /p password123 /t http://timestamp.digicert.com dist\EasyOTP.exe
+      run: |
+        signtool sign /f cert.pfx /p password123 /t http://timestamp.digicert.com dist\EasyOTP.exe
     
     - name: Upload artifact
       uses: actions/upload-artifact@v4
