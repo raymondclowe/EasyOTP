@@ -43,7 +43,6 @@ jobs:
         Set-Content -Path certificate\certificate.txt -Value "${{ secrets.CERT_PFX }}"
         certutil -decode certificate\certificate.txt certificate\certificate.pfx
         Write-Host "Decoded PFX file size: $((Get-Item certificate\certificate.pfx).Length) bytes"
-        certutil -dump certificate\certificate.pfx | Select-Object -First 20
 
     - name: Find and use signtool
       env:
