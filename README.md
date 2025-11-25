@@ -76,25 +76,28 @@ easyotp
 
 ## Building Windows Executable
 
-The repository includes a GitHub Actions workflow that automatically builds a Windows executable using PyInstaller:
+The repository includes a GitHub Actions workflow that automatically builds a Windows executable using PyInstaller.
 
-```yaml
-# Triggered on push to main, tags, or manually
-# Creates EasyOTP.exe in dist/ folder
-# Available as artifact in GitHub Actions
-```
+### Manual Build (Windows)
 
-To build manually:
+1. **Activate your virtual environment** (if not already active):
+	```powershell
+	.venv\Scripts\Activate.ps1
+	```
+2. **Install PyInstaller** (if not already installed):
+	```powershell
+	pip install pyinstaller
+	```
+3. **Build the executable**:
+	```powershell
+	python -m PyInstaller --name=EasyOTP --onefile --windowed easyotp/main.py
+	```
+4. **Find the executable** in:
+	```
+	dist/EasyOTP.exe
+	```
 
-```bash
-# Install PyInstaller
-pip install pyinstaller
-
-# Build the executable
-pyinstaller --name=EasyOTP --onefile --windowed easyotp/main.py
-
-# Find the executable in dist/EasyOTP.exe
-```
+You can now distribute or run `EasyOTP.exe` on Windows without requiring Python to be installed.
 
 ## Security
 
