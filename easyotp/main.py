@@ -3,6 +3,7 @@ import flet as ft
 import pyperclip
 import time
 import threading
+import json
 from typing import List, Optional
 from pathlib import Path
 
@@ -12,15 +13,29 @@ from easyotp.qr_scanner import QRScanner
 from easyotp.qr_scanner import PYZBAR_AVAILABLE
 
 
+# Window settings file path
+WINDOW_SETTINGS_PATH = Path.home() / ".easyotp" / "window_settings.json"
+
+# Minimum window dimensions
+MIN_WINDOW_WIDTH = 400
+MIN_WINDOW_HEIGHT = 300
+
+# Maximum reasonable screen bounds for position validation
+# These are conservative values to ensure window is visible on any monitor configuration
+MAX_SCREEN_WIDTH = 8000
+MAX_SCREEN_HEIGHT = 4000
+
+
 class OTPListItem(ft.Container):
     """A single OTP item in the list."""
     
-    def __init__(self, item: OTPItem, on_copy, on_edit, on_delete, is_selected=False):
+    def __init__(self, item: OTPItem, on_copy, on_edit, on_delete, on_show_secret, is_selected=False):
         super().__init__()
         self.otp_item = item
         self.on_copy = on_copy
         self.on_edit_callback = on_edit
         self.on_delete_callback = on_delete
+        self.on_show_secret_callback = on_show_secret
         self.is_selected = is_selected
         
         self.code_text = ft.Text(
@@ -42,13 +57,8 @@ class OTPListItem(ft.Container):
             color=ft.colors.GREY_600
         )
         
-        self.timer_text = ft.Text(
-            value=f"{OTPGenerator.get_remaining_seconds()}s",
-            size=14,
-            color=ft.colors.GREY_700
-        )
-        
-        self.content = ft.Row(
+        # Create the row content
+        row_content = ft.Row(
             controls=[
                 ft.Column(
                     controls=[
@@ -61,10 +71,6 @@ class OTPListItem(ft.Container):
                 ft.Column(
                     controls=[
                         self.code_text,
-                        ft.Row(
-                            controls=[self.timer_text],
-                            alignment=ft.MainAxisAlignment.END
-                        )
                     ],
                     spacing=2,
                     horizontal_alignment=ft.CrossAxisAlignment.END
@@ -73,10 +79,16 @@ class OTPListItem(ft.Container):
             alignment=ft.MainAxisAlignment.SPACE_BETWEEN
         )
         
+        # Wrap content in GestureDetector for right-click support
+        self.content = ft.GestureDetector(
+            content=row_content,
+            on_tap=self._handle_click,
+            on_secondary_tap=self._show_context_menu,
+            on_long_press_start=self._show_context_menu,
+        )
+        
         self.padding = 15
         self.border_radius = 8
-        self.on_click = self._handle_click
-        self.on_long_press = self._show_context_menu
         self.ink = True
         self._update_background()
     
@@ -101,9 +113,8 @@ class OTPListItem(ft.Container):
         return OTPGenerator.generate_code(self.otp_item.secret)
     
     def update_code(self):
-        """Update the displayed code and timer."""
+        """Update the displayed code."""
         self.code_text.value = self._get_code()
-        self.timer_text.value = f"{OTPGenerator.get_remaining_seconds()}s"
         if self.page:
             self.update()
     
@@ -122,7 +133,10 @@ class OTPListItem(ft.Container):
                 title=ft.Text(f"Actions for {self.otp_item.name}"),
                 content=ft.Column(
                     controls=[
-                        ft.TextButton("Edit", on_click=lambda _: self._edit()),
+                        ft.TextButton("Edit Name", on_click=lambda _: self._edit_name()),
+                        ft.TextButton("Edit Issuer/Org", on_click=lambda _: self._edit_issuer()),
+                        ft.TextButton("Update Secret", on_click=lambda _: self._edit_secret()),
+                        ft.TextButton("Show Secret", on_click=lambda _: self._show_secret()),
                         ft.TextButton("Delete", on_click=lambda _: self._delete()),
                         ft.TextButton("Cancel", on_click=lambda _: self._close_menu()),
                     ],
@@ -134,15 +148,30 @@ class OTPListItem(ft.Container):
             menu.open = True
             self.page.update()
     
-    def _edit(self):
-        """Trigger edit callback."""
+    def _edit_name(self):
+        """Edit only the name."""
         self._close_menu()
-        self.on_edit_callback(self.otp_item)
+        self.on_edit_callback(self.otp_item, "name")
+    
+    def _edit_issuer(self):
+        """Edit only the issuer/org."""
+        self._close_menu()
+        self.on_edit_callback(self.otp_item, "issuer")
+    
+    def _edit_secret(self):
+        """Edit only the secret."""
+        self._close_menu()
+        self.on_edit_callback(self.otp_item, "secret")
     
     def _delete(self):
         """Trigger delete callback."""
         self._close_menu()
         self.on_delete_callback(self.otp_item)
+    
+    def _show_secret(self):
+        """Trigger show secret callback."""
+        self._close_menu()
+        self.on_show_secret_callback(self.otp_item)
     
     def _close_menu(self):
         """Close the context menu."""
@@ -157,19 +186,37 @@ class EasyOTPApp:
     def __init__(self, page: ft.Page):
         self.page = page
         self.page.title = "EasyOTP"
-        self.page.window_width = 500
-        self.page.window_height = 700
+        
+        # Set minimum window size
+        self.page.window_min_width = MIN_WINDOW_WIDTH
+        self.page.window_min_height = MIN_WINDOW_HEIGHT
+        
+        # Load and apply window settings
+        self._load_window_settings()
+        
+        # Set up window resize and move handlers
+        self.page.on_resize = self._on_window_resize
+        self.page.on_window_event = self._on_window_event
         
         self.storage = Storage()
         self.items: List[OTPItem] = []
         self.list_items: List[OTPListItem] = []
         self.selected_index: Optional[int] = None
         
+        # Global timer display
+        self.global_timer_text = ft.Text(
+            value=f"{OTPGenerator.get_remaining_seconds()}s",
+            size=16,
+            weight=ft.FontWeight.BOLD,
+            color=ft.colors.BLUE_700
+        )
+        
         self.search_field = ft.TextField(
             hint_text="Search...",
             autofocus=True,
             on_change=self._on_search_change,
-            prefix_icon=ft.icons.SEARCH
+            prefix_icon=ft.icons.SEARCH,
+            expand=True
         )
         
         self.list_view = ft.ListView(
@@ -185,14 +232,96 @@ class EasyOTPApp:
         # Set up keyboard handler
         self.page.on_keyboard_event = self._on_keyboard
     
+    def _load_window_settings(self):
+        """Load window position and size from settings file."""
+        default_width = 500
+        default_height = 700
+        
+        try:
+            if WINDOW_SETTINGS_PATH.exists():
+                with open(WINDOW_SETTINGS_PATH, 'r') as f:
+                    settings = json.load(f)
+                
+                # Get screen dimensions (Flet doesn't provide this directly,
+                # so we use reasonable defaults for validation)
+                width = max(MIN_WINDOW_WIDTH, settings.get('width', default_width))
+                height = max(MIN_WINDOW_HEIGHT, settings.get('height', default_height))
+                left = settings.get('left', None)
+                top = settings.get('top', None)
+                
+                # Apply size
+                self.page.window_width = width
+                self.page.window_height = height
+                
+                # Apply position if available and reasonable
+                # Ensure window isn't positioned off-screen
+                if left is not None and top is not None:
+                    # Basic bounds check - ensure at least part of window is visible
+                    # Use defined constants for maximum screen bounds
+                    if left > -width + 100 and top > -height + 100 and left < MAX_SCREEN_WIDTH and top < MAX_SCREEN_HEIGHT:
+                        self.page.window_left = left
+                        self.page.window_top = top
+                    else:
+                        # Reset to center if position seems off-screen
+                        self.page.window_center()
+            else:
+                self.page.window_width = default_width
+                self.page.window_height = default_height
+        except (json.JSONDecodeError, IOError, KeyError) as e:
+            # Log error and use defaults if settings can't be loaded
+            print(f"Note: Could not load window settings: {e}")
+            self.page.window_width = default_width
+            self.page.window_height = default_height
+    
+    def _save_window_settings(self):
+        """Save window position and size to settings file."""
+        try:
+            settings = {
+                'width': self.page.window_width,
+                'height': self.page.window_height,
+                'left': self.page.window_left,
+                'top': self.page.window_top
+            }
+            WINDOW_SETTINGS_PATH.parent.mkdir(parents=True, exist_ok=True)
+            with open(WINDOW_SETTINGS_PATH, 'w') as f:
+                json.dump(settings, f, indent=2)
+        except (IOError, OSError) as e:
+            # Log but don't crash if we can't save settings
+            print(f"Note: Could not save window settings: {e}")
+    
+    def _on_window_resize(self, e):
+        """Handle window resize events."""
+        self._save_window_settings()
+    
+    def _on_window_event(self, e):
+        """Handle window events (move, close, etc.)."""
+        if e.data in ("moved", "close"):
+            self._save_window_settings()
+    
     def _setup_ui(self):
         """Set up the user interface."""
         import easyotp
         self._version = getattr(easyotp, "__version__", "unknown")
+        
+        # Timer container with icon
+        timer_container = ft.Container(
+            content=ft.Row(
+                controls=[
+                    ft.Icon(ft.icons.TIMER, size=16, color=ft.colors.BLUE_700),
+                    self.global_timer_text,
+                ],
+                spacing=4,
+            ),
+            padding=ft.padding.symmetric(horizontal=8, vertical=4),
+            border_radius=4,
+            bgcolor=ft.colors.BLUE_50,
+        )
+        
         # Top bar with search and buttons
         top_bar = ft.Row(
             controls=[
                 self.search_field,
+                timer_container,
                 ft.IconButton(
                     icon=ft.icons.ADD,
                     tooltip="Add Item",
@@ -262,6 +391,7 @@ class EasyOTPApp:
                 on_copy=self._copy_code,
                 on_edit=self._edit_item,
                 on_delete=self._confirm_delete,
+                on_show_secret=self._show_secret,
                 is_selected=is_selected
             )
             self.list_items.append(list_item)
@@ -291,9 +421,21 @@ class EasyOTPApp:
             else:
                 item.set_selected(False)
         
-        # Show snackbar
+        # Show snackbar with prominent styling
         self.page.snack_bar = ft.SnackBar(
-            content=ft.Text(f"Copied {list_item.otp_item.name}: {code}"),
+            content=ft.Row(
+                controls=[
+                    ft.Icon(ft.icons.CHECK_CIRCLE, color=ft.colors.WHITE, size=24),
+                    ft.Text(
+                        f"Code copied to clipboard: {code}",
+                        color=ft.colors.WHITE,
+                        size=16,
+                        weight=ft.FontWeight.W_500
+                    ),
+                ],
+                spacing=10,
+            ),
+            bgcolor=ft.colors.GREEN_700,
             duration=2000
         )
         self.page.snack_bar.open = True
@@ -399,40 +541,169 @@ class EasyOTPApp:
             else:
                 self._show_error("No OTP QR code found in image")
     
-    def _edit_item(self, item: OTPItem):
-        """Show dialog to edit an item."""
-        name_field = ft.TextField(label="Name", value=item.name, autofocus=True)
-        secret_field = ft.TextField(label="Secret Key", value=item.secret)
-        issuer_field = ft.TextField(label="Issuer (optional)", value=item.issuer)
-        
-        def save_item(e):
-            secret = OTPGenerator.normalize_secret(secret_field.value)
-            if name_field.value and secret:
+    def _edit_item(self, item: OTPItem, field: str = "all"):
+        """Show dialog to edit an item. Field can be 'all', 'name', 'issuer', or 'secret'."""
+        if field == "name":
+            # Edit only name
+            name_field = ft.TextField(label="Name", value=item.name, autofocus=True)
+            
+            def save_name(e):
+                if name_field.value:
+                    new_item = OTPItem(
+                        name=name_field.value,
+                        secret=item.secret,
+                        issuer=item.issuer
+                    )
+                    self.storage.update_item(item.name, new_item)
+                    self._load_items()
+                    dialog.open = False
+                    self.page.update()
+            
+            dialog = ft.AlertDialog(
+                title=ft.Text("Edit Name"),
+                content=ft.Column(controls=[name_field], tight=True, spacing=10),
+                actions=[
+                    ft.TextButton("Cancel", on_click=lambda _: self._close_dialog(dialog)),
+                    ft.TextButton("Save", on_click=save_name)
+                ]
+            )
+        elif field == "issuer":
+            # Edit only issuer/org
+            issuer_field = ft.TextField(label="Issuer/Organization", value=item.issuer, autofocus=True)
+            
+            def save_issuer(e):
                 new_item = OTPItem(
-                    name=name_field.value,
-                    secret=secret,
+                    name=item.name,
+                    secret=item.secret,
                     issuer=issuer_field.value
                 )
                 self.storage.update_item(item.name, new_item)
                 self._load_items()
                 dialog.open = False
                 self.page.update()
+            
+            dialog = ft.AlertDialog(
+                title=ft.Text("Edit Issuer/Organization"),
+                content=ft.Column(controls=[issuer_field], tight=True, spacing=10),
+                actions=[
+                    ft.TextButton("Cancel", on_click=lambda _: self._close_dialog(dialog)),
+                    ft.TextButton("Save", on_click=save_issuer)
+                ]
+            )
+        elif field == "secret":
+            # Edit only secret
+            secret_field = ft.TextField(label="Secret Key", value=item.secret, autofocus=True)
+            
+            def save_secret(e):
+                secret = OTPGenerator.normalize_secret(secret_field.value)
+                if secret:
+                    new_item = OTPItem(
+                        name=item.name,
+                        secret=secret,
+                        issuer=item.issuer
+                    )
+                    self.storage.update_item(item.name, new_item)
+                    self._load_items()
+                    dialog.open = False
+                    self.page.update()
+            
+            dialog = ft.AlertDialog(
+                title=ft.Text("Update Secret"),
+                content=ft.Column(controls=[secret_field], tight=True, spacing=10),
+                actions=[
+                    ft.TextButton("Cancel", on_click=lambda _: self._close_dialog(dialog)),
+                    ft.TextButton("Save", on_click=save_secret)
+                ]
+            )
+        else:
+            # Edit all fields
+            name_field = ft.TextField(label="Name", value=item.name, autofocus=True)
+            secret_field = ft.TextField(label="Secret Key", value=item.secret)
+            issuer_field = ft.TextField(label="Issuer (optional)", value=item.issuer)
+            
+            def save_item(e):
+                secret = OTPGenerator.normalize_secret(secret_field.value)
+                if name_field.value and secret:
+                    new_item = OTPItem(
+                        name=name_field.value,
+                        secret=secret,
+                        issuer=issuer_field.value
+                    )
+                    self.storage.update_item(item.name, new_item)
+                    self._load_items()
+                    dialog.open = False
+                    self.page.update()
+            
+            dialog = ft.AlertDialog(
+                title=ft.Text("Edit OTP Item"),
+                content=ft.Column(
+                    controls=[name_field, secret_field, issuer_field],
+                    tight=True,
+                    spacing=10
+                ),
+                actions=[
+                    ft.TextButton("Cancel", on_click=lambda _: self._close_dialog(dialog)),
+                    ft.TextButton("Save", on_click=save_item)
+                ]
+            )
         
+        self.page.dialog = dialog
+        dialog.open = True
+        self.page.update()
+    
+    def _show_secret(self, item: OTPItem):
+        """Show dialog displaying the secret key."""
         dialog = ft.AlertDialog(
-            title=ft.Text("Edit OTP Item"),
+            title=ft.Text(f"Secret for {item.name}"),
             content=ft.Column(
-                controls=[name_field, secret_field, issuer_field],
+                controls=[
+                    ft.Text("Secret Key:", size=12, color=ft.colors.GREY_600),
+                    ft.Container(
+                        content=ft.Text(
+                            item.secret,
+                            font_family="Courier New",
+                            size=14,
+                            selectable=True
+                        ),
+                        bgcolor=ft.colors.GREY_100,
+                        padding=10,
+                        border_radius=4,
+                    ),
+                    ft.Text(
+                        "⚠️ Keep this secret safe and don't share it!",
+                        size=12,
+                        color=ft.colors.ORANGE_700,
+                        italic=True
+                    ),
+                ],
                 tight=True,
                 spacing=10
             ),
             actions=[
-                ft.TextButton("Cancel", on_click=lambda _: self._close_dialog(dialog)),
-                ft.TextButton("Save", on_click=save_item)
+                ft.TextButton("Copy", on_click=lambda _: self._copy_secret_to_clipboard(item.secret)),
+                ft.TextButton("Close", on_click=lambda _: self._close_dialog(dialog))
             ]
         )
         
         self.page.dialog = dialog
         dialog.open = True
+        self.page.update()
+    
+    def _copy_secret_to_clipboard(self, secret: str):
+        """Copy secret to clipboard."""
+        pyperclip.copy(secret)
+        self.page.snack_bar = ft.SnackBar(
+            content=ft.Row(
+                controls=[
+                    ft.Icon(ft.icons.CHECK_CIRCLE, color=ft.colors.WHITE, size=24),
+                    ft.Text("Secret copied to clipboard", color=ft.colors.WHITE, size=16),
+                ],
+                spacing=10,
+            ),
+            bgcolor=ft.colors.BLUE_700,
+            duration=2000
+        )
+        self.page.snack_bar.open = True
         self.page.update()
     
     def _confirm_delete(self, item: OTPItem):
@@ -523,26 +794,32 @@ class EasyOTPApp:
         self.page.update()
     
     def _start_timer_thread(self):
-        """Start a background thread to update codes."""
+        """Start a background thread to update codes and global timer."""
         def update_codes():
             last_period = -1
             while True:
-                # Get current 30-second period
-                current_period = int(time.time()) // 30
+                try:
+                    # Get current 30-second period
+                    current_period = int(time.time()) // 30
+                    
+                    # Only update codes when we enter a new 30-second period
+                    if current_period != last_period:
+                        last_period = current_period
+                        for list_item in self.list_items:
+                            try:
+                                list_item.update_code()
+                            except Exception:
+                                pass  # Skip items that fail to update
+                    
+                    # Update global timer display every second
+                    remaining = OTPGenerator.get_remaining_seconds()
+                    self.global_timer_text.value = f"{remaining}s"
+                    if self.global_timer_text.page:
+                        self.global_timer_text.update()
+                except Exception:
+                    pass  # Continue the timer thread even if an update fails
                 
-                # Only update when we enter a new 30-second period
-                if current_period != last_period:
-                    last_period = current_period
-                    for list_item in self.list_items:
-                        list_item.update_code()
-                
-                # Update timer display every second
                 time.sleep(1)
-                for list_item in self.list_items:
-                    # Only update the timer text, not the code
-                    list_item.timer_text.value = f"{OTPGenerator.get_remaining_seconds()}s"
-                    if list_item.page:
-                        list_item.timer_text.update()
         
         thread = threading.Thread(target=update_codes, daemon=True)
         thread.start()
