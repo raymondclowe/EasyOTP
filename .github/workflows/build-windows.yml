@@ -28,13 +28,14 @@ jobs:
       run: uv python install 3.11
     
     - name: Install dependencies
-      run: |
-        uv pip install --system -e .
-        uv pip install --system pyinstaller
+      run: uv sync
+    
+    - name: Install PyInstaller
+      run: uv add --dev pyinstaller
     
     - name: Build executable with PyInstaller
       run: |
-        pyinstaller --name=EasyOTP --onefile --windowed --icon=NONE --add-data "easyotp:easyotp" easyotp/main.py
+        uv run pyinstaller --name=EasyOTP --onefile --windowed --icon=NONE easyotp/main.py
     
     - name: Upload artifact
       uses: actions/upload-artifact@v4
