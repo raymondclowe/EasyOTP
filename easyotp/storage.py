@@ -125,11 +125,15 @@ class Storage:
         """Load OTP items from encrypted storage."""
         if not self.storage_path.exists():
             return []
-        
         try:
             encrypted_data = self.storage_path.read_bytes()
             decrypted_data = self._fernet.decrypt(encrypted_data)
-            items_data = json.loads(decrypted_data.decode())
+            data = json.loads(decrypted_data.decode())
+            # Support both old (list) and new (dict) formats
+            if isinstance(data, dict) and "items" in data:
+                items_data = data["items"]
+            else:
+                items_data = data
             return [OTPItem.from_dict(item) for item in items_data]
         except Exception as e:
             # If decryption fails (wrong machine/user), return empty list
@@ -137,9 +141,13 @@ class Storage:
             return []
     
     def save_items(self, items: List[OTPItem]):
-        """Save OTP items to encrypted storage."""
-        items_data = [item.to_dict() for item in items]
-        json_data = json.dumps(items_data, indent=2)
+        """Save OTP items to encrypted storage, with version info."""
+        from easyotp import __version__ as app_version
+        data = {
+            "version": app_version,
+            "items": [item.to_dict() for item in items]
+        }
+        json_data = json.dumps(data, indent=2)
         encrypted_data = self._fernet.encrypt(json_data.encode())
         self.storage_path.write_bytes(encrypted_data)
     
@@ -165,18 +173,26 @@ class Storage:
         self.save_items(items)
     
     def export_to_json(self, filepath: str):
-        """Export items to unencrypted JSON file."""
+        """Export items to unencrypted JSON file, with version info."""
+        from easyotp import __version__ as app_version
         items = self.load_items()
-        items_data = [item.to_dict() for item in items]
+        data = {
+            "version": app_version,
+            "items": [item.to_dict() for item in items]
+        }
         with open(filepath, 'w') as f:
-            json.dump(items_data, f, indent=2)
+            json.dump(data, f, indent=2)
     
     def import_from_json(self, filepath: str):
-        """Import items from unencrypted JSON file."""
+        """Import items from unencrypted JSON file (supports versioned and legacy formats)."""
         with open(filepath, 'r') as f:
-            items_data = json.load(f)
+            data = json.load(f)
+        # Support both new (dict) and old (list) formats
+        if isinstance(data, dict) and "items" in data:
+            items_data = data["items"]
+        else:
+            items_data = data
         new_items = [OTPItem.from_dict(item) for item in items_data]
-        
         # Merge with existing items (avoid duplicates by name)
         existing_items = self.load_items()
         existing_names = {item.name for item in existing_items}
