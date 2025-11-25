@@ -37,23 +37,35 @@ jobs:
       run: |
         uv run pyinstaller --name=EasyOTP --onefile --windowed --icon=NONE easyotp/main.py
     
-    - name: Decode certificate
+    - name: Decode and import certificate
+      env:
+        CERT_PASSWORD: ${{ secrets.CERT_PASSWORD }}
       run: |
         New-Item -ItemType directory -Path certificate
         Set-Content -Path certificate\certificate.txt -Value "${{ secrets.CERT_PFX }}"
         certutil -decode certificate\certificate.txt certificate\certificate.pfx
         Write-Host "Decoded PFX file size: $((Get-Item certificate\certificate.pfx).Length) bytes"
+        
+        # Import certificate to store
+        $securePassword = ConvertTo-SecureString -String $env:CERT_PASSWORD -Force -AsPlainText
+        $cert = Import-PfxCertificate -FilePath certificate\certificate.pfx -CertStoreLocation Cert:\CurrentUser\My -Password $securePassword
+        Write-Host "Imported certificate thumbprint: $($cert.Thumbprint)"
+        Write-Host "Certificate subject: $($cert.Subject)"
 
     - name: Find and use signtool
       env:
         CERT_PASSWORD: ${{ secrets.CERT_PASSWORD }}
       run: |
         $signtool = Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits\10\bin\*\x64\signtool.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
-        if ($signtool) {
+        $cert = Get-ChildItem -Path Cert:\CurrentUser\My -CodeSigningCert | Select-Object -First 1
+        if ($signtool -and $cert) {
           Write-Host "Using signtool at: $($signtool.FullName)"
-          Write-Host "PFX file exists: $(Test-Path certificate\certificate.pfx)"
-          Write-Host "Password length: $($env:CERT_PASSWORD.Length)"
-          & $signtool.FullName sign /f certificate\certificate.pfx /p $env:CERT_PASSWORD /fd SHA256 /tr http://timestamp.digicert.com /td sha256 dist\EasyOTP.exe
+          Write-Host "Using certificate: $($cert.Thumbprint)"
+          & $signtool.FullName sign /sha1 $cert.Thumbprint /fd SHA256 /tr http://timestamp.digicert.com /td sha256 dist\EasyOTP.exe
+        } elseif (-not $cert) {
+          Write-Error "No code signing certificate found in store"
+          Get-ChildItem -Path Cert:\CurrentUser\My | Format-List Subject, Thumbprint, EnhancedKeyUsageList
+          exit 1
         } else {
           Write-Error "signtool not found"
           exit 1
@@ -61,7 +73,9 @@ jobs:
 
     - name: Cleanup certificate files
       if: always()
-      run: Remove-Item -Recurse -Force certificate
+      run: |
+        Remove-Item -Recurse -Force certificate -ErrorAction SilentlyContinue
+        Get-ChildItem -Path Cert:\CurrentUser\My | Where-Object { $_.Subject -like "*EasyOTP*" } | Remove-Item -ErrorAction SilentlyContinue
     
     - name: Upload artifact
       uses: actions/upload-artifact@v4
