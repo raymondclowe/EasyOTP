@@ -45,7 +45,7 @@ jobs:
 
     - name: Build executable with PyInstaller
       run: |
-        uv run pyinstaller --name=EasyOTP --onefile --windowed --icon=NONE easyotp/main.py
+        uv run pyinstaller --name=EasyOTP --onefile --windowed easyotp/main.py
 
     - name: Package app bundle
       run: |
