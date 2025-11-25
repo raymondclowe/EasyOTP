@@ -74,9 +74,44 @@ easyotp
 - Select "Export" to save items to a JSON file
 - Select "Import" to restore items from a backup
 
-## Building Windows Executable
+## Windows Executable
 
-The repository includes a GitHub Actions workflow that automatically builds a Windows executable using PyInstaller.
+### Downloading Pre-built Releases
+
+Pre-built Windows executables are available from the [Releases](https://github.com/raymondclowe/EasyOTP/releases) page. The executable is self-signed with a certificate specific to this project.
+
+#### Security Options
+
+Since the executable is self-signed (not from a commercial Certificate Authority), Windows SmartScreen will show a warning. You have several options:
+
+1. **Run as Python** (Most Secure)
+   - Follow the installation instructions above to run from source
+   - You can review all the code before running
+
+2. **Build It Yourself**
+   - Follow the manual build instructions below
+   - Ensures you're running exactly what you compiled
+
+3. **Trust the Certificate** (Recommended if you trust this project)
+   - Download and install [EasyOTP.cer](EasyOTP.cer)
+   - Right-click the file → "Install Certificate"
+   - Choose "Local Machine" → "Place all certificates in the following store"
+   - Select "Trusted Root Certification Authorities"
+   - This tells Windows to trust executables signed with this certificate
+   - **Note**: Only do this if you trust this project and its maintainer
+
+4. **Click "Run Anyway"**
+   - When Windows SmartScreen blocks the app, click "More info" → "Run anyway"
+   - You'll need to do this each time you download a new version
+
+#### Verifying the Signature
+
+To verify the executable is properly signed:
+1. Right-click `EasyOTP.exe` → Properties → Digital Signatures
+2. You should see a signature from "EasyOTP" with details:
+   - Organization: Raymond Clowe
+   - Organizational Unit: Github: raymondclowe
+   - Location: Hong Kong
 
 ### Manual Build (Windows)
 
