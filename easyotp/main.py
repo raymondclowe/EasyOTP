@@ -20,6 +20,11 @@ WINDOW_SETTINGS_PATH = Path.home() / ".easyotp" / "window_settings.json"
 MIN_WINDOW_WIDTH = 400
 MIN_WINDOW_HEIGHT = 300
 
+# Maximum reasonable screen bounds for position validation
+# These are conservative values to ensure window is visible on any monitor configuration
+MAX_SCREEN_WIDTH = 8000
+MAX_SCREEN_HEIGHT = 4000
+
 
 class OTPListItem(ft.Container):
     """A single OTP item in the list."""
@@ -252,8 +257,8 @@ class EasyOTPApp:
                 # Ensure window isn't positioned off-screen
                 if left is not None and top is not None:
                     # Basic bounds check - ensure at least part of window is visible
-                    # Use conservative bounds since we don't know actual screen size
-                    if left > -width + 100 and top > -height + 100 and left < 3000 and top < 2000:
+                    # Use defined constants for maximum screen bounds
+                    if left > -width + 100 and top > -height + 100 and left < MAX_SCREEN_WIDTH and top < MAX_SCREEN_HEIGHT:
                         self.page.window_left = left
                         self.page.window_top = top
                     else:
@@ -262,8 +267,9 @@ class EasyOTPApp:
             else:
                 self.page.window_width = default_width
                 self.page.window_height = default_height
-        except (json.JSONDecodeError, IOError, KeyError):
-            # Use defaults if settings can't be loaded
+        except (json.JSONDecodeError, IOError, KeyError) as e:
+            # Log error and use defaults if settings can't be loaded
+            print(f"Note: Could not load window settings: {e}")
             self.page.window_width = default_width
             self.page.window_height = default_height
     
@@ -279,8 +285,9 @@ class EasyOTPApp:
             WINDOW_SETTINGS_PATH.parent.mkdir(parents=True, exist_ok=True)
             with open(WINDOW_SETTINGS_PATH, 'w') as f:
                 json.dump(settings, f, indent=2)
-        except (IOError, OSError):
-            pass  # Silently fail if we can't save settings
+        except (IOError, OSError) as e:
+            # Log but don't crash if we can't save settings
+            print(f"Note: Could not save window settings: {e}")
     
     def _on_window_resize(self, e):
         """Handle window resize events."""
@@ -791,20 +798,26 @@ class EasyOTPApp:
         def update_codes():
             last_period = -1
             while True:
-                # Get current 30-second period
-                current_period = int(time.time()) // 30
-                
-                # Only update codes when we enter a new 30-second period
-                if current_period != last_period:
-                    last_period = current_period
-                    for list_item in self.list_items:
-                        list_item.update_code()
-                
-                # Update global timer display every second
-                remaining = OTPGenerator.get_remaining_seconds()
-                self.global_timer_text.value = f"{remaining}s"
-                if self.global_timer_text.page:
-                    self.global_timer_text.update()
+                try:
+                    # Get current 30-second period
+                    current_period = int(time.time()) // 30
+                    
+                    # Only update codes when we enter a new 30-second period
+                    if current_period != last_period:
+                        last_period = current_period
+                        for list_item in self.list_items:
+                            try:
+                                list_item.update_code()
+                            except Exception:
+                                pass  # Skip items that fail to update
+                    
+                    # Update global timer display every second
+                    remaining = OTPGenerator.get_remaining_seconds()
+                    self.global_timer_text.value = f"{remaining}s"
+                    if self.global_timer_text.page:
+                        self.global_timer_text.update()
+                except Exception:
+                    pass  # Continue the timer thread even if an update fails
                 
                 time.sleep(1)
         
