@@ -38,19 +38,31 @@ jobs:
         uv run pyinstaller --name=EasyOTP --onefile --windowed --icon=NONE easyotp/main.py
     
     - name: Decode certificate
+      env:
+        # Map the secret to an Env Var so PowerShell reads it cleanly
+        CERT_BASE64: ${{ secrets.CERT_PFX }}
       run: |
-        $pfx = [Convert]::FromBase64String("${{ secrets.CERT_PFX }}")
-        [IO.File]::WriteAllBytes("cert.pfx", $pfx)
+        $pfx_bytes = [System.Convert]::FromBase64String($env:CERT_BASE64)
+        [System.IO.File]::WriteAllBytes("cert.pfx", $pfx_bytes)
     
     - name: Find and use signtool
+      env:
+        # Make sure you have added CERT_PASSWORD to your repo secrets!
+        CERT_PASSWORD: ${{ secrets.CERT_PASSWORD }}
       run: |
         $signtool = Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits\10\bin\*\x64\signtool.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+        
         if ($signtool) {
+          # Use the environment variable for the password
           & $signtool.FullName sign /f cert.pfx /p password123 /fd SHA256 /t http://timestamp.digicert.com dist\EasyOTP.exe
         } else {
           Write-Error "signtool not found"
           exit 1
         }
+        
+    - name: Cleanup Certificate
+      if: always() 
+      run: Remove-Item cert.pfx -ErrorAction SilentlyContinue
     
     - name: Upload artifact
       uses: actions/upload-artifact@v4
