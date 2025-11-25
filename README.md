@@ -80,6 +80,8 @@ easyotp
 
 Pre-built Windows executables are available from the [Releases](https://github.com/raymondclowe/EasyOTP/releases) page. The executable is self-signed with a certificate specific to this project.
 
+> **Note:** macOS, Linux `.deb`, and Raspberry Pi (arm64) archives are now published alongside the Windows build. These additional binaries are produced automatically and have **not** been manually tested on real hardware; treat them as experimental and prefer building from source if you need a verified release on those platforms.
+
 #### Security Options
 
 Since the executable is self-signed (not from a commercial Certificate Authority), Windows SmartScreen will show a warning. You have several options:
