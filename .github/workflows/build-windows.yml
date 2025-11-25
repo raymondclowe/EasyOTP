@@ -42,7 +42,7 @@ jobs:
     
     - name: Create self-signed certificate
       run: |
-        $cert = New-SelfSignedCertificate -Subject "CN=EasyOTP, O=Raymond Clowe, OU=Open Source Developer, C=US, ST=California, L=San Francisco" -CertStoreLocation "Cert:\CurrentUser\My" -KeyExportPolicy Exportable -KeySpec Signature -KeyLength 2048 -KeyAlgorithm RSA -HashAlgorithm SHA256 -NotAfter (Get-Date).AddYears(1)
+        $cert = New-SelfSignedCertificate -Subject "CN=EasyOTP, O=Raymond Lowe, OU=Github: raymondclowe, C=CN, ST=Hong Kong, L=Hong Kong" -CertStoreLocation "Cert:\CurrentUser\My" -KeyExportPolicy Exportable -KeySpec Signature -KeyLength 2048 -KeyAlgorithm RSA -HashAlgorithm SHA256 -NotAfter (Get-Date).AddYears(1)
         $password = ConvertTo-SecureString -String "password123" -Force -AsPlainText
         Export-PfxCertificate -Cert $cert -FilePath cert.pfx -Password $password
     
