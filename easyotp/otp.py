@@ -24,8 +24,11 @@ class OTPGenerator:
     
     @staticmethod
     def normalize_secret(secret: str) -> str:
-        """Normalize a secret by removing spaces and converting to uppercase."""
-        secret = secret.replace(" ", "").replace("-", "").upper()
+        """Normalize a secret by removing all whitespace and converting to uppercase."""
+        # Remove all whitespace characters (spaces, tabs, newlines, etc.)
+        secret = "".join(secret.split())
+        # Also remove dashes for convenience
+        secret = secret.replace("-", "").upper()
         return secret
     
     @staticmethod
