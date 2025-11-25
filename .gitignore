@@ -209,3 +209,4 @@ __marimo__/
 # EasyOTP specific
 test_basic.py
 .easyotp/
+cert.pfx
