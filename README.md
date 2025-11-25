@@ -112,6 +112,7 @@ To verify the executable is properly signed:
    - Organization: Raymond Clowe
    - Organizational Unit: Github: raymondclowe
    - Location: Hong Kong
+3. The certificate thumbprint should be: `F81508B5807D93C1C278B5A35D73D1F381D5F3D0`
 
 ### Manual Build (Windows)
 
