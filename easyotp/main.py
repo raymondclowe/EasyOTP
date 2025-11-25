@@ -480,11 +480,13 @@ class EasyOTPApp:
         
         def add_item(e):
             secret = OTPGenerator.normalize_secret(secret_field.value)
-            if name_field.value and secret:
+            name = name_field.value.strip() if name_field.value else ""
+            issuer = issuer_field.value.strip() if issuer_field.value else ""
+            if name and secret:
                 item = OTPItem(
-                    name=name_field.value,
+                    name=name,
                     secret=secret,
-                    issuer=issuer_field.value
+                    issuer=issuer
                 )
                 self.storage.add_item(item)
                 self._load_items()
@@ -548,9 +550,10 @@ class EasyOTPApp:
             name_field = ft.TextField(label="Name", value=item.name, autofocus=True)
             
             def save_name(e):
-                if name_field.value:
+                name = name_field.value.strip() if name_field.value else ""
+                if name:
                     new_item = OTPItem(
-                        name=name_field.value,
+                        name=name,
                         secret=item.secret,
                         issuer=item.issuer
                     )
@@ -572,10 +575,11 @@ class EasyOTPApp:
             issuer_field = ft.TextField(label="Issuer/Organization", value=item.issuer, autofocus=True)
             
             def save_issuer(e):
+                issuer = issuer_field.value.strip() if issuer_field.value else ""
                 new_item = OTPItem(
                     name=item.name,
                     secret=item.secret,
-                    issuer=issuer_field.value
+                    issuer=issuer
                 )
                 self.storage.update_item(item.name, new_item)
                 self._load_items()
@@ -623,11 +627,13 @@ class EasyOTPApp:
             
             def save_item(e):
                 secret = OTPGenerator.normalize_secret(secret_field.value)
-                if name_field.value and secret:
+                name = name_field.value.strip() if name_field.value else ""
+                issuer = issuer_field.value.strip() if issuer_field.value else ""
+                if name and secret:
                     new_item = OTPItem(
-                        name=name_field.value,
+                        name=name,
                         secret=secret,
-                        issuer=issuer_field.value
+                        issuer=issuer
                     )
                     self.storage.update_item(item.name, new_item)
                     self._load_items()
