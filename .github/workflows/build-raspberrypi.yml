@@ -35,6 +35,8 @@ jobs:
         distro: ubuntu22.04
         githubToken: ${{ github.token }}
         shell: bash
+        install: |
+          echo "No additional install steps"
         run: |
           set -eux
           apt-get update
