@@ -26,29 +26,33 @@ jobs:
         echo "VERSION=$VERSION" >> $GITHUB_ENV
         echo "version=$VERSION" >> $GITHUB_OUTPUT
 
+    - name: Set up QEMU
+      uses: docker/setup-qemu-action@v3
+      with:
+        platforms: arm64
+
     - name: Build arm64 executable
-      uses: uraimo/run-on-arch-action@v2
       env:
         VERSION: ${{ steps.get-version.outputs.version }}
-      with:
-        arch: aarch64
-        distro: ubuntu22.04
-        githubToken: ${{ github.token }}
-        shell: bash
-        install: |
-          echo "No additional install steps"
-        run: |
-          set -eux
-          apt-get update
-          apt-get install -y python3 python3-venv python3-pip python3-dev build-essential libzbar0 libgl1 libglib2.0-0 libsm6 libxext6 libxrender1 patchelf
-          python3 -m venv .venv
-          . .venv/bin/activate
-          pip install --upgrade pip
-          pip install pyinstaller
-          pip install .
-          pyinstaller --name=EasyOTP --onefile --windowed --icon=NONE easyotp/main.py
-          cd dist
-          tar -czf "EasyOTP-raspi-arm64-${VERSION}.tar.gz" EasyOTP
+      run: |
+        docker run --rm --platform linux/arm64/v8 \
+          -v "${PWD}:/workspace" \
+          -w /workspace \
+          -e VERSION="${VERSION}" \
+          arm64v8/ubuntu:22.04 \
+          bash -lc '
+            set -eux
+            apt-get update
+            apt-get install -y python3 python3-venv python3-pip python3-dev build-essential libzbar0 libgl1 libglib2.0-0 libsm6 libxext6 libxrender1 patchelf
+            python3 -m venv .venv
+            . .venv/bin/activate
+            pip install --upgrade pip
+            pip install pyinstaller
+            pip install .
+            pyinstaller --name=EasyOTP --onefile --windowed --icon=NONE easyotp/main.py
+            cd dist
+            tar -czf "EasyOTP-raspi-arm64-${VERSION}.tar.gz" EasyOTP
+          '
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4
