@@ -210,3 +210,4 @@ __marimo__/
 test_basic.py
 .easyotp/
 cert.pfx
+*.pfx
