@@ -9,6 +9,7 @@ from pathlib import Path
 from .storage import Storage, OTPItem
 from .otp import OTPGenerator
 from .qr_scanner import QRScanner
+from easyotp.qr_scanner import PYZBAR_AVAILABLE
 
 
 class OTPListItem(ft.Container):
@@ -330,6 +331,17 @@ class EasyOTPApp:
                 dialog.open = False
                 self.page.update()
         
+        qr_button = ft.ElevatedButton(
+            "Scan QR Code",
+            icon=ft.icons.QR_CODE_SCANNER,
+            on_click=(
+                (lambda _: qr_file_picker.pick_files(
+                    allow_multiple=False,
+                    allowed_extensions=["png", "jpg", "jpeg"]
+                )) if PYZBAR_AVAILABLE else (lambda _: self._show_error("QR code scanning is not available. Required library (pyzbar) or DLL is missing."))
+            ),
+            disabled=not PYZBAR_AVAILABLE
+        )
         dialog = ft.AlertDialog(
             title=ft.Text("Add OTP Item"),
             content=ft.Column(
@@ -337,14 +349,7 @@ class EasyOTPApp:
                     name_field,
                     secret_field,
                     issuer_field,
-                    ft.ElevatedButton(
-                        "Scan QR Code",
-                        icon=ft.icons.QR_CODE_SCANNER,
-                        on_click=lambda _: qr_file_picker.pick_files(
-                            allow_multiple=False,
-                            allowed_extensions=["png", "jpg", "jpeg"]
-                        )
-                    )
+                    qr_button
                 ],
                 tight=True,
                 spacing=10
