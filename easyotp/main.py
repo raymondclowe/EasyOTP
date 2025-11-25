@@ -26,6 +26,11 @@ MAX_SCREEN_WIDTH = 8000
 MAX_SCREEN_HEIGHT = 4000
 
 
+def _safe_strip(value: str) -> str:
+    """Safely strip leading and trailing whitespace from a string value."""
+    return value.strip() if value else ""
+
+
 class OTPListItem(ft.Container):
     """A single OTP item in the list."""
     
@@ -480,8 +485,8 @@ class EasyOTPApp:
         
         def add_item(e):
             secret = OTPGenerator.normalize_secret(secret_field.value)
-            name = name_field.value.strip() if name_field.value else ""
-            issuer = issuer_field.value.strip() if issuer_field.value else ""
+            name = _safe_strip(name_field.value)
+            issuer = _safe_strip(issuer_field.value)
             if name and secret:
                 item = OTPItem(
                     name=name,
@@ -550,7 +555,7 @@ class EasyOTPApp:
             name_field = ft.TextField(label="Name", value=item.name, autofocus=True)
             
             def save_name(e):
-                name = name_field.value.strip() if name_field.value else ""
+                name = _safe_strip(name_field.value)
                 if name:
                     new_item = OTPItem(
                         name=name,
@@ -575,7 +580,7 @@ class EasyOTPApp:
             issuer_field = ft.TextField(label="Issuer/Organization", value=item.issuer, autofocus=True)
             
             def save_issuer(e):
-                issuer = issuer_field.value.strip() if issuer_field.value else ""
+                issuer = _safe_strip(issuer_field.value)
                 new_item = OTPItem(
                     name=item.name,
                     secret=item.secret,
@@ -627,8 +632,8 @@ class EasyOTPApp:
             
             def save_item(e):
                 secret = OTPGenerator.normalize_secret(secret_field.value)
-                name = name_field.value.strip() if name_field.value else ""
-                issuer = issuer_field.value.strip() if issuer_field.value else ""
+                name = _safe_strip(name_field.value)
+                issuer = _safe_strip(issuer_field.value)
                 if name and secret:
                     new_item = OTPItem(
                         name=name,
