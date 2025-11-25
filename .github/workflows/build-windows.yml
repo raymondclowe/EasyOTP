@@ -37,6 +37,18 @@ jobs:
       run: |
         uv run pyinstaller --name=EasyOTP --onefile --windowed --icon=NONE easyotp/main.py
     
+    - name: Install Windows SDK for signtool
+      run: choco install windows-sdk-10.1
+    
+    - name: Create self-signed certificate
+      run: |
+        $cert = New-SelfSignedCertificate -Subject "CN=EasyOTP" -CertStoreLocation "Cert:\CurrentUser\My" -KeyExportPolicy Exportable -KeySpec Signature -KeyLength 2048 -KeyAlgorithm RSA -HashAlgorithm SHA256 -NotAfter (Get-Date).AddYears(1)
+        $password = ConvertTo-SecureString -String "password123" -Force -AsPlainText
+        Export-PfxCertificate -Cert $cert -FilePath cert.pfx -Password $password
+    
+    - name: Sign the executable
+      run: signtool sign /f cert.pfx /p password123 /t http://timestamp.digicert.com dist\EasyOTP.exe
+    
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
