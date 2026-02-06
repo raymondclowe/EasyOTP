@@ -5,7 +5,7 @@ import platform
 import subprocess
 import base64
 from pathlib import Path
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Tuple
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
@@ -183,8 +183,57 @@ class Storage:
         with open(filepath, 'w') as f:
             json.dump(data, f, indent=2)
     
-    def import_from_json(self, filepath: str):
-        """Import items from unencrypted JSON file (supports versioned and legacy formats)."""
+    def _is_identical(self, item1: OTPItem, item2: OTPItem) -> bool:
+        """Check if two OTP items are identical (same secret, name, and issuer)."""
+        return (item1.secret == item2.secret and 
+                item1.name == item2.name and 
+                item1.issuer == item2.issuer)
+    
+    def _has_same_secret(self, item1: OTPItem, item2: OTPItem) -> bool:
+        """Check if two OTP items have the same secret."""
+        return item1.secret == item2.secret
+    
+    def detect_duplicates(self, new_items: List[OTPItem]) -> Tuple[List[OTPItem], List[Tuple[OTPItem, OTPItem]]]:
+        """
+        Detect duplicates when importing items.
+        
+        Returns:
+            Tuple of (items_to_add, conflicts)
+            - items_to_add: List of new items with no conflicts
+            - conflicts: List of tuples (existing_item, new_item) where same secret but different metadata
+        """
+        existing_items = self.load_items()
+        items_to_add = []
+        conflicts = []
+        
+        for new_item in new_items:
+            # Check against all existing items
+            has_conflict = False
+            for existing_item in existing_items:
+                # Case 1: Identical duplicate - skip silently
+                if self._is_identical(new_item, existing_item):
+                    has_conflict = True
+                    break
+                # Case 2: Same secret but different name/issuer - mark as conflict
+                elif self._has_same_secret(new_item, existing_item):
+                    conflicts.append((existing_item, new_item))
+                    has_conflict = True
+                    break
+            
+            if not has_conflict:
+                items_to_add.append(new_item)
+        
+        return items_to_add, conflicts
+    
+    def import_from_json(self, filepath: str) -> Tuple[List[OTPItem], List[Tuple[OTPItem, OTPItem]]]:
+        """
+        Import items from unencrypted JSON file (supports versioned and legacy formats).
+        
+        Returns:
+            Tuple of (items_to_add, conflicts)
+            - items_to_add: List of new items with no conflicts that can be added
+            - conflicts: List of tuples (existing_item, new_item) requiring user resolution
+        """
         with open(filepath, 'r') as f:
             data = json.load(f)
         # Support both new (dict) and old (list) formats
@@ -193,12 +242,12 @@ class Storage:
         else:
             items_data = data
         new_items = [OTPItem.from_dict(item) for item in items_data]
-        # Merge with existing items (avoid duplicates by name)
+        
+        # Detect duplicates
+        return self.detect_duplicates(new_items)
+    
+    def add_items(self, items: List[OTPItem]):
+        """Add multiple OTP items to storage."""
         existing_items = self.load_items()
-        existing_names = {item.name for item in existing_items}
-        
-        for item in new_items:
-            if item.name not in existing_names:
-                existing_items.append(item)
-        
+        existing_items.extend(items)
         self.save_items(existing_items)
