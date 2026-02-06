@@ -824,7 +824,6 @@ class EasyOTPApp:
         """Show dialog for resolving import conflicts."""
         # Store decisions for each conflict
         conflict_decisions = {}
-        current_index = [0]  # Use list to allow modification in nested function
         
         def show_conflict(index):
             """Show conflict at given index."""
@@ -914,8 +913,8 @@ class EasyOTPApp:
                 # Do nothing, keep existing
                 pass
             elif decision == "keep_new":
-                # Replace existing with new
-                items_to_replace.append((existing_item.name, new_item))
+                # Replace existing with new (by secret to ensure correct item is replaced)
+                items_to_replace.append((existing_item.secret, new_item))
             elif decision == "merge":
                 # Create merged item
                 merged_name = self._merge_fields(existing_item.name, new_item.name)
@@ -925,11 +924,11 @@ class EasyOTPApp:
                     secret=existing_item.secret,
                     issuer=merged_issuer
                 )
-                items_to_replace.append((existing_item.name, merged_item))
+                items_to_replace.append((existing_item.secret, merged_item))
         
-        # Apply replacements
-        for old_name, new_item in items_to_replace:
-            self.storage.update_item(old_name, new_item)
+        # Apply replacements by secret to ensure correct item is replaced
+        for secret, new_item in items_to_replace:
+            self.storage.update_item_by_secret(secret, new_item)
         
         # Add non-conflicting items
         if items_to_add:

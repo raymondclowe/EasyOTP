@@ -10,6 +10,9 @@ from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
+# Fallback version for when the package version cannot be imported
+FALLBACK_VERSION = "unknown"
+
 
 class OTPItem:
     """Represents an OTP item."""
@@ -145,7 +148,7 @@ class Storage:
         try:
             from easyotp import __version__ as app_version
         except ImportError:
-            app_version = "0.2.2"  # Fallback for testing
+            app_version = FALLBACK_VERSION
         data = {
             "version": app_version,
             "items": [item.to_dict() for item in items]
@@ -175,12 +178,21 @@ class Storage:
                 break
         self.save_items(items)
     
+    def update_item_by_secret(self, secret: str, new_item: OTPItem):
+        """Update an existing OTP item by secret."""
+        items = self.load_items()
+        for i, item in enumerate(items):
+            if item.secret == secret:
+                items[i] = new_item
+                break
+        self.save_items(items)
+    
     def export_to_json(self, filepath: str):
         """Export items to unencrypted JSON file, with version info."""
         try:
             from easyotp import __version__ as app_version
         except ImportError:
-            app_version = "0.2.2"  # Fallback for testing
+            app_version = FALLBACK_VERSION
         items = self.load_items()
         data = {
             "version": app_version,
