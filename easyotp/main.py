@@ -936,7 +936,7 @@ class EasyOTPApp:
         
         # Reload and show success message
         self._load_items()
-        total_imported = len(items_to_add) + len([d for d in decisions.values() if d in ["keep_new", "merge"]])
+        total_imported = len(items_to_add) + sum(1 for d in decisions.values() if d in ["keep_new", "merge"])
         self.page.snack_bar = ft.SnackBar(
             content=ft.Text(f"Import complete! {total_imported} item(s) processed."),
             duration=2000
