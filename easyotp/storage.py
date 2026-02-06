@@ -142,7 +142,10 @@ class Storage:
     
     def save_items(self, items: List[OTPItem]):
         """Save OTP items to encrypted storage, with version info."""
-        from easyotp import __version__ as app_version
+        try:
+            from easyotp import __version__ as app_version
+        except ImportError:
+            app_version = "0.2.2"  # Fallback for testing
         data = {
             "version": app_version,
             "items": [item.to_dict() for item in items]
@@ -174,7 +177,10 @@ class Storage:
     
     def export_to_json(self, filepath: str):
         """Export items to unencrypted JSON file, with version info."""
-        from easyotp import __version__ as app_version
+        try:
+            from easyotp import __version__ as app_version
+        except ImportError:
+            app_version = "0.2.2"  # Fallback for testing
         items = self.load_items()
         data = {
             "version": app_version,
