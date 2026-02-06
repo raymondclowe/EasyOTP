@@ -774,6 +774,22 @@ class EasyOTPApp:
             allow_multiple=False
         )
     
+    @staticmethod
+    def _merge_fields(field1: str, field2: str) -> str:
+        """Merge two field values, handling empty strings properly."""
+        # If both are the same, return one
+        if field1 == field2:
+            return field1 or field2
+        
+        # If one is empty, return the other
+        if not field1:
+            return field2
+        if not field2:
+            return field1
+        
+        # Both are different and non-empty, concatenate
+        return f"{field1} / {field2}"
+    
     def _handle_import_file(self, e: ft.FilePickerResultEvent):
         """Handle import file selection."""
         if e.files:
@@ -834,8 +850,8 @@ class EasyOTPApp:
                 ft.Text(f"Secret: {new_item.secret[:10]}...", size=12, color=ft.colors.GREY_600),
             ], spacing=5)
             
-            merged_name = f"{existing_item.name} / {new_item.name}" if existing_item.name != new_item.name else existing_item.name
-            merged_issuer = f"{existing_item.issuer} / {new_item.issuer}" if existing_item.issuer != new_item.issuer else (existing_item.issuer or new_item.issuer)
+            merged_name = self._merge_fields(existing_item.name, new_item.name)
+            merged_issuer = self._merge_fields(existing_item.issuer, new_item.issuer)
             
             merged_preview = ft.Column([
                 ft.Text("Merged Result:", weight=ft.FontWeight.BOLD, size=14),
@@ -902,8 +918,8 @@ class EasyOTPApp:
                 items_to_replace.append((existing_item.name, new_item))
             elif decision == "merge":
                 # Create merged item
-                merged_name = f"{existing_item.name} / {new_item.name}" if existing_item.name != new_item.name else existing_item.name
-                merged_issuer = f"{existing_item.issuer} / {new_item.issuer}" if existing_item.issuer != new_item.issuer else (existing_item.issuer or new_item.issuer)
+                merged_name = self._merge_fields(existing_item.name, new_item.name)
+                merged_issuer = self._merge_fields(existing_item.issuer, new_item.issuer)
                 merged_item = OTPItem(
                     name=merged_name,
                     secret=existing_item.secret,
