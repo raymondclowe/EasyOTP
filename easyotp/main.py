@@ -47,19 +47,21 @@ class OTPListItem(ft.Container):
             value=self._get_code(),
             size=24,
             weight=ft.FontWeight.BOLD,
-            font_family="Courier New"
+            font_family="Courier New",
+            color=ft.colors.BLACK
         )
         
         self.name_text = ft.Text(
             value=item.name,
             size=16,
-            weight=ft.FontWeight.W_500
+            weight=ft.FontWeight.W_500,
+            color=ft.colors.BLACK
         )
         
         self.issuer_text = ft.Text(
             value=item.issuer if item.issuer else "",
             size=12,
-            color=ft.colors.GREY_600
+            color=ft.colors.GREY_700
         )
         
         # Create the row content
@@ -674,6 +676,7 @@ class EasyOTPApp:
                             item.secret,
                             font_family="Courier New",
                             size=14,
+                            color=ft.colors.BLACK,
                             selectable=True
                         ),
                         bgcolor=ft.colors.GREY_100,
