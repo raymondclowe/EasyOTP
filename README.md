@@ -13,6 +13,8 @@ A simple Timed OTP (TOTP) application in Python and Flet (Flutter-like UI) becau
 - ✏️ **Edit items** - Right-click context menu for editing
 - 📤 **Export/Import** - Backup and restore your OTP items
 - ⏱️ **Live countdown** - See remaining time for each code
+- Dark mode support
+- De-duplicate on import
 
 ## Installation
 
