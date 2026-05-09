@@ -4,7 +4,7 @@ import pyperclip
 import time
 import threading
 import json
-from typing import List, Optional
+from typing import List, Optional, Tuple, Dict
 from pathlib import Path
 
 from easyotp.storage import Storage, OTPItem
@@ -820,10 +820,18 @@ class EasyOTPApp:
             except Exception as ex:
                 self._show_error(f"Import failed: {ex}")
     
-    def _show_conflict_resolution_dialog(self, items_to_add: List[OTPItem], conflicts: List[tuple]):
+    def _show_conflict_resolution_dialog(self, items_to_add: List[OTPItem], conflicts: List[Tuple[OTPItem, OTPItem]]):
         """Show dialog for resolving import conflicts."""
         # Store decisions for each conflict
-        conflict_decisions = {}
+        conflict_decisions: Dict[int, str] = {}
+        
+        def handle_dismiss(e):
+            """Handle dialog dismissal - default to keep existing and continue."""
+            if len(conflict_decisions) < len(conflicts):
+                # User dismissed without making a decision, default to keep_existing
+                current_index = len(conflict_decisions)
+                conflict_decisions[current_index] = "keep_existing"
+                show_conflict(current_index + 1)
         
         def show_conflict(index):
             """Show conflict at given index."""
@@ -878,6 +886,7 @@ class EasyOTPApp:
                 show_conflict(index + 1)
             
             dialog = ft.AlertDialog(
+                modal=True,
                 title=ft.Text(f"Duplicate Secret Detected ({index + 1} of {len(conflicts)})"),
                 content=ft.Column([
                     ft.Text("The same secret exists with different name/issuer fields.", size=13),
@@ -894,6 +903,7 @@ class EasyOTPApp:
                     ft.TextButton("Merge", on_click=handle_merge),
                 ],
                 actions_alignment=ft.MainAxisAlignment.SPACE_AROUND,
+                on_dismiss=handle_dismiss,
             )
             self.page.dialog = dialog
             dialog.open = True
@@ -902,7 +912,7 @@ class EasyOTPApp:
         # Start showing conflicts
         show_conflict(0)
     
-    def _process_conflict_decisions(self, items_to_add: List[OTPItem], conflicts: List[tuple], decisions: dict):
+    def _process_conflict_decisions(self, items_to_add: List[OTPItem], conflicts: List[Tuple[OTPItem, OTPItem]], decisions: Dict[int, str]):
         """Process conflict resolution decisions and update storage."""
         items_to_replace = []
         

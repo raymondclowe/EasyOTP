@@ -179,12 +179,17 @@ class Storage:
         self.save_items(items)
     
     def update_item_by_secret(self, secret: str, new_item: OTPItem):
-        """Update an existing OTP item by secret."""
+        """Update all existing OTP items with the given secret."""
         items = self.load_items()
+        updated = False
         for i, item in enumerate(items):
             if item.secret == secret:
                 items[i] = new_item
-                break
+                updated = True
+                # Don't break - update all items with this secret to maintain consistency
+        if not updated:
+            # Log or handle case where no item was found with this secret
+            pass
         self.save_items(items)
     
     def export_to_json(self, filepath: str):
@@ -223,22 +228,38 @@ class Storage:
         existing_items = self.load_items()
         items_to_add = []
         conflicts = []
+        seen_secrets = set()  # Track secrets we've already processed in this import
         
         for new_item in new_items:
-            # Check against all existing items
-            has_conflict = False
+            # Skip if we've already seen this secret in the import file
+            if new_item.secret in seen_secrets:
+                continue
+            seen_secrets.add(new_item.secret)
+            
+            # Check against all existing items for identical match first
+            is_identical = False
+            conflict_item = None
+            
             for existing_item in existing_items:
                 # Case 1: Identical duplicate - skip silently
                 if self._is_identical(new_item, existing_item):
-                    has_conflict = True
+                    is_identical = True
                     break
-                # Case 2: Same secret but different name/issuer - mark as conflict
+                # Case 2: Same secret but different name/issuer - potential conflict
                 elif self._has_same_secret(new_item, existing_item):
-                    conflicts.append((existing_item, new_item))
-                    has_conflict = True
-                    break
+                    # Store the first conflict, but keep checking for identical match
+                    if conflict_item is None:
+                        conflict_item = existing_item
             
-            if not has_conflict:
+            # Process the result
+            if is_identical:
+                # Skip silently - identical duplicate found
+                pass
+            elif conflict_item is not None:
+                # Same secret but different metadata - add to conflicts
+                conflicts.append((conflict_item, new_item))
+            else:
+                # No conflict - add to items_to_add
                 items_to_add.append(new_item)
         
         return items_to_add, conflicts
@@ -252,6 +273,13 @@ class Storage:
             - items_to_add: List of new items with no conflicts that can be added
             - conflicts: List of tuples (existing_item, new_item) requiring user resolution
         """
+        # Import normalize_secret directly to avoid circular import
+        import importlib.util
+        otp_path = Path(__file__).parent / "otp.py"
+        spec = importlib.util.spec_from_file_location("otp_module", otp_path)
+        otp_module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(otp_module)
+        
         with open(filepath, 'r') as f:
             data = json.load(f)
         # Support both new (dict) and old (list) formats
@@ -259,7 +287,14 @@ class Storage:
             items_data = data["items"]
         else:
             items_data = data
-        new_items = [OTPItem.from_dict(item) for item in items_data]
+        
+        # Create items and normalize secrets
+        new_items = []
+        for item_data in items_data:
+            item = OTPItem.from_dict(item_data)
+            # Normalize secret to match the normalization done during add/edit
+            item.secret = otp_module.OTPGenerator.normalize_secret(item.secret)
+            new_items.append(item)
         
         # Detect duplicates
         return self.detect_duplicates(new_items)
