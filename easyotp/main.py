@@ -31,6 +31,15 @@ def _safe_strip(value: str) -> str:
     return value.strip() if value else ""
 
 
+def _is_dark_mode(page: ft.Page) -> bool:
+    """Check if current page theme mode is dark."""
+    if page.theme_mode == ft.ThemeMode.DARK:
+        return True
+    if page.theme_mode == ft.ThemeMode.LIGHT:
+        return False
+    return str(getattr(page, "platform_brightness", "")).lower() == "dark"
+
+
 class OTPListItem(ft.Container):
     """A single OTP item in the list."""
     
@@ -47,15 +56,13 @@ class OTPListItem(ft.Container):
             value=self._get_code(),
             size=24,
             weight=ft.FontWeight.BOLD,
-            font_family="Courier New",
-            color=ft.colors.BLACK
+            font_family="Courier New"
         )
         
         self.name_text = ft.Text(
             value=item.name,
             size=16,
-            weight=ft.FontWeight.W_500,
-            color=ft.colors.BLACK
+            weight=ft.FontWeight.W_500
         )
         
         self.issuer_text = ft.Text(
@@ -101,7 +108,7 @@ class OTPListItem(ft.Container):
     
     def _update_background(self):
         """Update background color based on selection state."""
-        is_dark_mode = self._is_dark_mode()
+        is_dark_mode = _is_dark_mode(self.page) if self.page else False
         self.code_text.color = ft.colors.WHITE if is_dark_mode else ft.colors.BLACK
         self.name_text.color = ft.colors.WHITE if is_dark_mode else ft.colors.BLACK
         self.issuer_text.color = ft.colors.GREY_400 if is_dark_mode else ft.colors.GREY_700
@@ -117,16 +124,6 @@ class OTPListItem(ft.Container):
         """Apply theme-aware styling after control is attached to page."""
         self._update_background()
         self.update()
-
-    def _is_dark_mode(self) -> bool:
-        """Check if current theme mode is dark."""
-        if not self.page:
-            return False
-        if self.page.theme_mode == ft.ThemeMode.DARK:
-            return True
-        if self.page.theme_mode == ft.ThemeMode.LIGHT:
-            return False
-        return str(getattr(self.page, "platform_brightness", "")).lower() == "dark"
     
     def set_selected(self, selected: bool):
         """Set selection state."""
@@ -686,7 +683,7 @@ class EasyOTPApp:
     
     def _show_secret(self, item: OTPItem):
         """Show dialog displaying the secret key."""
-        is_dark_mode = self._is_dark_mode()
+        is_dark_mode = _is_dark_mode(self.page)
         dialog = ft.AlertDialog(
             title=ft.Text(f"Secret for {item.name}"),
             content=ft.Column(
@@ -993,14 +990,6 @@ class EasyOTPApp:
         self.page.snack_bar.open = True
         self.page.update()
 
-    def _is_dark_mode(self) -> bool:
-        """Check if current page theme mode is dark."""
-        if self.page.theme_mode == ft.ThemeMode.DARK:
-            return True
-        if self.page.theme_mode == ft.ThemeMode.LIGHT:
-            return False
-        return str(getattr(self.page, "platform_brightness", "")).lower() == "dark"
-    
     def _start_timer_thread(self):
         """Start a background thread to update codes and global timer."""
         def update_codes():
