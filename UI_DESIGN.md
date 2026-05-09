@@ -138,6 +138,7 @@ Each card displays:
 - **Text**: Dark gray (#212121)
 - **Secondary text**: Medium gray (#757575)
 - **Codes**: Black, bold, monospace (Courier New)
+- **Dark mode compatibility**: Foreground and card colors switch together (dark text on light cards, light text on dark cards) for readability
 
 ## Window Size
 - Default width: 500px

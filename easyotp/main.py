@@ -31,6 +31,15 @@ def _safe_strip(value: str) -> str:
     return value.strip() if value else ""
 
 
+def _is_dark_mode(page: ft.Page) -> bool:
+    """Check if current page theme mode is dark."""
+    if page.theme_mode == ft.ThemeMode.DARK:
+        return True
+    if page.theme_mode == ft.ThemeMode.LIGHT:
+        return False
+    return page.platform_brightness == ft.Brightness.DARK
+
+
 class OTPListItem(ft.Container):
     """A single OTP item in the list."""
     
@@ -59,7 +68,7 @@ class OTPListItem(ft.Container):
         self.issuer_text = ft.Text(
             value=item.issuer if item.issuer else "",
             size=12,
-            color=ft.colors.GREY_600
+            color=ft.colors.GREY_700
         )
         
         # Create the row content
@@ -99,12 +108,22 @@ class OTPListItem(ft.Container):
     
     def _update_background(self):
         """Update background color based on selection state."""
+        is_dark_mode = _is_dark_mode(self.page) if self.page else False
+        self.code_text.color = ft.colors.WHITE if is_dark_mode else ft.colors.BLACK
+        self.name_text.color = ft.colors.WHITE if is_dark_mode else ft.colors.BLACK
+        self.issuer_text.color = ft.colors.GREY_400 if is_dark_mode else ft.colors.GREY_700
+
         if self.is_selected:
-            self.bgcolor = ft.colors.BLUE_100
+            self.bgcolor = ft.colors.BLUE_900 if is_dark_mode else ft.colors.BLUE_100
             self.border = ft.border.all(2, ft.colors.BLUE_400)
         else:
-            self.bgcolor = ft.colors.GREY_100
+            self.bgcolor = ft.colors.GREY_900 if is_dark_mode else ft.colors.GREY_100
             self.border = None
+
+    def did_mount(self):
+        """Apply theme-aware styling after control is attached to page."""
+        self._update_background()
+        self.update()
     
     def set_selected(self, selected: bool):
         """Set selection state."""
@@ -664,26 +683,28 @@ class EasyOTPApp:
     
     def _show_secret(self, item: OTPItem):
         """Show dialog displaying the secret key."""
+        is_dark_mode = _is_dark_mode(self.page)
         dialog = ft.AlertDialog(
             title=ft.Text(f"Secret for {item.name}"),
             content=ft.Column(
                 controls=[
-                    ft.Text("Secret Key:", size=12, color=ft.colors.GREY_600),
+                    ft.Text("Secret Key:", size=12, color=ft.colors.GREY_400 if is_dark_mode else ft.colors.GREY_700),
                     ft.Container(
                         content=ft.Text(
                             item.secret,
                             font_family="Courier New",
                             size=14,
+                            color=ft.colors.WHITE if is_dark_mode else ft.colors.BLACK,
                             selectable=True
                         ),
-                        bgcolor=ft.colors.GREY_100,
+                        bgcolor=ft.colors.GREY_900 if is_dark_mode else ft.colors.GREY_100,
                         padding=10,
                         border_radius=4,
                     ),
                     ft.Text(
                         "⚠️ Keep this secret safe and don't share it!",
                         size=12,
-                        color=ft.colors.ORANGE_700,
+                        color=ft.colors.ORANGE_400 if is_dark_mode else ft.colors.ORANGE_700,
                         italic=True
                     ),
                 ],
@@ -968,7 +989,7 @@ class EasyOTPApp:
         )
         self.page.snack_bar.open = True
         self.page.update()
-    
+
     def _start_timer_thread(self):
         """Start a background thread to update codes and global timer."""
         def update_codes():
