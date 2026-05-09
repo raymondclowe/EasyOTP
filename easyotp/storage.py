@@ -5,10 +5,13 @@ import platform
 import subprocess
 import base64
 from pathlib import Path
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Tuple
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+
+# Fallback version for when the package version cannot be imported
+FALLBACK_VERSION = "unknown"
 
 
 class OTPItem:
@@ -142,7 +145,10 @@ class Storage:
     
     def save_items(self, items: List[OTPItem]):
         """Save OTP items to encrypted storage, with version info."""
-        from easyotp import __version__ as app_version
+        try:
+            from easyotp import __version__ as app_version
+        except ImportError:
+            app_version = FALLBACK_VERSION
         data = {
             "version": app_version,
             "items": [item.to_dict() for item in items]
@@ -172,9 +178,26 @@ class Storage:
                 break
         self.save_items(items)
     
+    def update_item_by_secret(self, secret: str, new_item: OTPItem):
+        """Update all existing OTP items with the given secret."""
+        items = self.load_items()
+        updated = False
+        for i, item in enumerate(items):
+            if item.secret == secret:
+                items[i] = new_item
+                updated = True
+                # Don't break - update all items with this secret to maintain consistency
+        if not updated:
+            # Log or handle case where no item was found with this secret
+            pass
+        self.save_items(items)
+    
     def export_to_json(self, filepath: str):
         """Export items to unencrypted JSON file, with version info."""
-        from easyotp import __version__ as app_version
+        try:
+            from easyotp import __version__ as app_version
+        except ImportError:
+            app_version = FALLBACK_VERSION
         items = self.load_items()
         data = {
             "version": app_version,
@@ -183,8 +206,80 @@ class Storage:
         with open(filepath, 'w') as f:
             json.dump(data, f, indent=2)
     
-    def import_from_json(self, filepath: str):
-        """Import items from unencrypted JSON file (supports versioned and legacy formats)."""
+    def _is_identical(self, item1: OTPItem, item2: OTPItem) -> bool:
+        """Check if two OTP items are identical (same secret, name, and issuer)."""
+        return (item1.secret == item2.secret and 
+                item1.name == item2.name and 
+                item1.issuer == item2.issuer)
+    
+    def _has_same_secret(self, item1: OTPItem, item2: OTPItem) -> bool:
+        """Check if two OTP items have the same secret."""
+        return item1.secret == item2.secret
+    
+    def detect_duplicates(self, new_items: List[OTPItem]) -> Tuple[List[OTPItem], List[Tuple[OTPItem, OTPItem]]]:
+        """
+        Detect duplicates when importing items.
+        
+        Returns:
+            Tuple of (items_to_add, conflicts)
+            - items_to_add: List of new items with no conflicts
+            - conflicts: List of tuples (existing_item, new_item) where same secret but different metadata
+        """
+        existing_items = self.load_items()
+        items_to_add = []
+        conflicts = []
+        seen_secrets = set()  # Track secrets we've already processed in this import
+        
+        for new_item in new_items:
+            # Skip if we've already seen this secret in the import file
+            if new_item.secret in seen_secrets:
+                continue
+            seen_secrets.add(new_item.secret)
+            
+            # Check against all existing items for identical match first
+            is_identical = False
+            conflict_item = None
+            
+            for existing_item in existing_items:
+                # Case 1: Identical duplicate - skip silently
+                if self._is_identical(new_item, existing_item):
+                    is_identical = True
+                    break
+                # Case 2: Same secret but different name/issuer - potential conflict
+                elif self._has_same_secret(new_item, existing_item):
+                    # Store the first conflict, but keep checking for identical match
+                    if conflict_item is None:
+                        conflict_item = existing_item
+            
+            # Process the result
+            if is_identical:
+                # Skip silently - identical duplicate found
+                pass
+            elif conflict_item is not None:
+                # Same secret but different metadata - add to conflicts
+                conflicts.append((conflict_item, new_item))
+            else:
+                # No conflict - add to items_to_add
+                items_to_add.append(new_item)
+        
+        return items_to_add, conflicts
+    
+    def import_from_json(self, filepath: str) -> Tuple[List[OTPItem], List[Tuple[OTPItem, OTPItem]]]:
+        """
+        Import items from unencrypted JSON file (supports versioned and legacy formats).
+        
+        Returns:
+            Tuple of (items_to_add, conflicts)
+            - items_to_add: List of new items with no conflicts that can be added
+            - conflicts: List of tuples (existing_item, new_item) requiring user resolution
+        """
+        # Import normalize_secret directly to avoid circular import
+        import importlib.util
+        otp_path = Path(__file__).parent / "otp.py"
+        spec = importlib.util.spec_from_file_location("otp_module", otp_path)
+        otp_module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(otp_module)
+        
         with open(filepath, 'r') as f:
             data = json.load(f)
         # Support both new (dict) and old (list) formats
@@ -192,13 +287,20 @@ class Storage:
             items_data = data["items"]
         else:
             items_data = data
-        new_items = [OTPItem.from_dict(item) for item in items_data]
-        # Merge with existing items (avoid duplicates by name)
+        
+        # Create items and normalize secrets
+        new_items = []
+        for item_data in items_data:
+            item = OTPItem.from_dict(item_data)
+            # Normalize secret to match the normalization done during add/edit
+            item.secret = otp_module.OTPGenerator.normalize_secret(item.secret)
+            new_items.append(item)
+        
+        # Detect duplicates
+        return self.detect_duplicates(new_items)
+    
+    def add_items(self, items: List[OTPItem]):
+        """Add multiple OTP items to storage."""
         existing_items = self.load_items()
-        existing_names = {item.name for item in existing_items}
-        
-        for item in new_items:
-            if item.name not in existing_names:
-                existing_items.append(item)
-        
+        existing_items.extend(items)
         self.save_items(existing_items)

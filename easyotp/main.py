@@ -4,7 +4,7 @@ import pyperclip
 import time
 import threading
 import json
-from typing import List, Optional
+from typing import List, Optional, Tuple, Dict
 from pathlib import Path
 
 from easyotp.storage import Storage, OTPItem
@@ -774,20 +774,185 @@ class EasyOTPApp:
             allow_multiple=False
         )
     
+    @staticmethod
+    def _merge_fields(field1: str, field2: str) -> str:
+        """Merge two field values, handling empty strings properly."""
+        # If both are the same, return one
+        if field1 == field2:
+            return field1 or field2
+        
+        # If one is empty, return the other
+        if not field1:
+            return field2
+        if not field2:
+            return field1
+        
+        # Both are different and non-empty, concatenate
+        return f"{field1} / {field2}"
+    
     def _handle_import_file(self, e: ft.FilePickerResultEvent):
         """Handle import file selection."""
         if e.files:
             try:
-                self.storage.import_from_json(e.files[0].path)
-                self._load_items()
-                self.page.snack_bar = ft.SnackBar(
-                    content=ft.Text("Items imported successfully!"),
-                    duration=2000
-                )
-                self.page.snack_bar.open = True
-                self.page.update()
+                items_to_add, conflicts = self.storage.import_from_json(e.files[0].path)
+                
+                # If there are conflicts, show resolution dialog
+                if conflicts:
+                    self._show_conflict_resolution_dialog(items_to_add, conflicts)
+                else:
+                    # No conflicts, just add items
+                    if items_to_add:
+                        self.storage.add_items(items_to_add)
+                        self._load_items()
+                        self.page.snack_bar = ft.SnackBar(
+                            content=ft.Text(f"Imported {len(items_to_add)} item(s) successfully!"),
+                            duration=2000
+                        )
+                        self.page.snack_bar.open = True
+                        self.page.update()
+                    else:
+                        self.page.snack_bar = ft.SnackBar(
+                            content=ft.Text("No new items to import (all duplicates skipped)."),
+                            duration=2000
+                        )
+                        self.page.snack_bar.open = True
+                        self.page.update()
             except Exception as ex:
                 self._show_error(f"Import failed: {ex}")
+    
+    def _show_conflict_resolution_dialog(self, items_to_add: List[OTPItem], conflicts: List[Tuple[OTPItem, OTPItem]]):
+        """Show dialog for resolving import conflicts."""
+        # Store decisions for each conflict
+        conflict_decisions: Dict[int, str] = {}
+        
+        def handle_dismiss(e):
+            """Handle dialog dismissal - default to keep existing and continue."""
+            if len(conflict_decisions) < len(conflicts):
+                # User dismissed without making a decision, default to keep_existing
+                current_index = len(conflict_decisions)
+                conflict_decisions[current_index] = "keep_existing"
+                show_conflict(current_index + 1)
+        
+        def show_conflict(index):
+            """Show conflict at given index."""
+            if index >= len(conflicts):
+                # All conflicts resolved, process decisions
+                self._process_conflict_decisions(items_to_add, conflicts, conflict_decisions)
+                return
+            
+            existing_item, new_item = conflicts[index]
+            
+            # Create preview of both items
+            existing_preview = ft.Column([
+                ft.Text("Existing Item:", weight=ft.FontWeight.BOLD, size=14),
+                ft.Text(f"Name: {existing_item.name}", size=12),
+                ft.Text(f"Issuer: {existing_item.issuer or '(none)'}", size=12),
+                ft.Text(f"Secret: {existing_item.secret[:10]}...", size=12, color=ft.colors.GREY_600),
+            ], spacing=5)
+            
+            new_preview = ft.Column([
+                ft.Text("Import Item:", weight=ft.FontWeight.BOLD, size=14),
+                ft.Text(f"Name: {new_item.name}", size=12),
+                ft.Text(f"Issuer: {new_item.issuer or '(none)'}", size=12),
+                ft.Text(f"Secret: {new_item.secret[:10]}...", size=12, color=ft.colors.GREY_600),
+            ], spacing=5)
+            
+            merged_name = self._merge_fields(existing_item.name, new_item.name)
+            merged_issuer = self._merge_fields(existing_item.issuer, new_item.issuer)
+            
+            merged_preview = ft.Column([
+                ft.Text("Merged Result:", weight=ft.FontWeight.BOLD, size=14),
+                ft.Text(f"Name: {merged_name}", size=12),
+                ft.Text(f"Issuer: {merged_issuer or '(none)'}", size=12),
+                ft.Text(f"Secret: {existing_item.secret[:10]}...", size=12, color=ft.colors.GREY_600),
+            ], spacing=5)
+            
+            def handle_keep_existing(e):
+                conflict_decisions[index] = "keep_existing"
+                dialog.open = False
+                self.page.update()
+                show_conflict(index + 1)
+            
+            def handle_keep_new(e):
+                conflict_decisions[index] = "keep_new"
+                dialog.open = False
+                self.page.update()
+                show_conflict(index + 1)
+            
+            def handle_merge(e):
+                conflict_decisions[index] = "merge"
+                dialog.open = False
+                self.page.update()
+                show_conflict(index + 1)
+            
+            dialog = ft.AlertDialog(
+                modal=True,
+                title=ft.Text(f"Duplicate Secret Detected ({index + 1} of {len(conflicts)})"),
+                content=ft.Column([
+                    ft.Text("The same secret exists with different name/issuer fields.", size=13),
+                    ft.Divider(),
+                    existing_preview,
+                    ft.Divider(),
+                    new_preview,
+                    ft.Divider(),
+                    merged_preview,
+                ], tight=True, scroll=ft.ScrollMode.AUTO, height=400),
+                actions=[
+                    ft.TextButton("Keep Existing", on_click=handle_keep_existing),
+                    ft.TextButton("Keep Import", on_click=handle_keep_new),
+                    ft.TextButton("Merge", on_click=handle_merge),
+                ],
+                actions_alignment=ft.MainAxisAlignment.SPACE_AROUND,
+                on_dismiss=handle_dismiss,
+            )
+            self.page.dialog = dialog
+            dialog.open = True
+            self.page.update()
+        
+        # Start showing conflicts
+        show_conflict(0)
+    
+    def _process_conflict_decisions(self, items_to_add: List[OTPItem], conflicts: List[Tuple[OTPItem, OTPItem]], decisions: Dict[int, str]):
+        """Process conflict resolution decisions and update storage."""
+        items_to_replace = []
+        
+        for index, (existing_item, new_item) in enumerate(conflicts):
+            decision = decisions.get(index, "keep_existing")
+            
+            if decision == "keep_existing":
+                # Do nothing, keep existing
+                pass
+            elif decision == "keep_new":
+                # Replace existing with new (by secret to ensure correct item is replaced)
+                items_to_replace.append((existing_item.secret, new_item))
+            elif decision == "merge":
+                # Create merged item
+                merged_name = self._merge_fields(existing_item.name, new_item.name)
+                merged_issuer = self._merge_fields(existing_item.issuer, new_item.issuer)
+                merged_item = OTPItem(
+                    name=merged_name,
+                    secret=existing_item.secret,
+                    issuer=merged_issuer
+                )
+                items_to_replace.append((existing_item.secret, merged_item))
+        
+        # Apply replacements by secret to ensure correct item is replaced
+        for secret, new_item in items_to_replace:
+            self.storage.update_item_by_secret(secret, new_item)
+        
+        # Add non-conflicting items
+        if items_to_add:
+            self.storage.add_items(items_to_add)
+        
+        # Reload and show success message
+        self._load_items()
+        total_imported = len(items_to_add) + sum(1 for d in decisions.values() if d in ["keep_new", "merge"])
+        self.page.snack_bar = ft.SnackBar(
+            content=ft.Text(f"Import complete! {total_imported} item(s) processed."),
+            duration=2000
+        )
+        self.page.snack_bar.open = True
+        self.page.update()
     
     def _close_dialog(self, dialog):
         """Close a dialog."""
