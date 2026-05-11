@@ -37,7 +37,12 @@ def _is_dark_mode(page: ft.Page) -> bool:
         return True
     if page.theme_mode == ft.ThemeMode.LIGHT:
         return False
-    return page.platform_brightness == ft.Brightness.DARK
+    platform_brightness = getattr(page, "platform_brightness", None)
+    if platform_brightness is None:
+        return False
+
+    brightness_value = str(platform_brightness).lower()
+    return brightness_value == "dark" or brightness_value.endswith(".dark")
 
 
 class OTPListItem(ft.Container):
