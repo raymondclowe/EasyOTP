@@ -42,7 +42,7 @@ def _is_dark_mode(page: ft.Page) -> bool:
         return False
 
     brightness_value = str(platform_brightness).lower()
-    return brightness_value == "dark" or brightness_value.endswith(".dark")
+    return brightness_value in {"dark", "brightness.dark"}
 
 
 class OTPListItem(ft.Container):
