@@ -273,12 +273,9 @@ class Storage:
             - items_to_add: List of new items with no conflicts that can be added
             - conflicts: List of tuples (existing_item, new_item) requiring user resolution
         """
-        # Import normalize_secret directly to avoid circular import
-        import importlib.util
-        otp_path = Path(__file__).parent / "otp.py"
-        spec = importlib.util.spec_from_file_location("otp_module", otp_path)
-        otp_module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(otp_module)
+        # Import locally to avoid module-level circular imports while remaining
+        # compatible with packaged executables (e.g., PyInstaller onefile).
+        from easyotp.otp import OTPGenerator
         
         with open(filepath, 'r') as f:
             data = json.load(f)
@@ -293,7 +290,7 @@ class Storage:
         for item_data in items_data:
             item = OTPItem.from_dict(item_data)
             # Normalize secret to match the normalization done during add/edit
-            item.secret = otp_module.OTPGenerator.normalize_secret(item.secret)
+            item.secret = OTPGenerator.normalize_secret(item.secret)
             new_items.append(item)
         
         # Detect duplicates
