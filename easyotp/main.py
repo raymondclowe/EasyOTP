@@ -37,7 +37,19 @@ def _is_dark_mode(page: ft.Page) -> bool:
         return True
     if page.theme_mode == ft.ThemeMode.LIGHT:
         return False
-    return page.platform_brightness == ft.Brightness.DARK
+    platform_brightness = getattr(page, "platform_brightness", None)
+    if platform_brightness is None:
+        # Some Flet versions/platforms don't expose platform brightness.
+        # Default to light mode instead of raising an error.
+        return False
+
+    brightness = getattr(ft, "Brightness", None)
+    dark_brightness = getattr(brightness, "DARK", None) if brightness else None
+    if dark_brightness is not None and platform_brightness == dark_brightness:
+        return True
+
+    # Fallback for versions that provide brightness as a plain string.
+    return str(platform_brightness).strip().lower() == "dark"
 
 
 class OTPListItem(ft.Container):
