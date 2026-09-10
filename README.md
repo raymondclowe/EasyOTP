@@ -54,6 +54,7 @@ uv run easyotp
   sudo apt install libzbar0
   ```
 - On Linux with `flet==0.18.0`, EasyOTP runs in browser view by default and opens a local URL automatically.
+- To force the old desktop mode on Linux, set `EASYOTP_LINUX_VIEW=desktop` before launch.
 
 ### Using pip
 
