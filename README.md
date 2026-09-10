@@ -47,6 +47,15 @@ uv sync
 uv run easyotp
 ```
 
+### Linux source install notes
+
+- Install system dependency for QR scanning:
+  ```bash
+  sudo apt install libzbar0
+  ```
+- On Linux with `flet==0.18.0`, EasyOTP runs in browser view by default and opens a local URL automatically.
+- To force the old desktop mode on Linux, set `EASYOTP_LINUX_VIEW=desktop` before launch.
+
 ### Using pip
 
 ```bash
@@ -161,13 +170,15 @@ You can now distribute or run `EasyOTP.exe` on Windows without requiring Python 
 
 ## Requirements
 
-- Python 3.8+
-- flet >= 0.24.0
-- pyotp >= 2.9.0
-- cryptography >= 42.0.0
-- pyperclip >= 1.9.0
-- pillow >= 10.0.0
-- pyzbar >= 0.1.9 (optional, for QR code scanning)
+- Python 3.10 or 3.11
+- flet == 0.18.0
+- pyotp == 2.8.0
+- cryptography == 41.0.3
+- pyperclip == 1.8.2
+- pillow == 9.5.0
+- numpy < 2
+- opencv-python == 4.7.0.72
+- `libzbar0` on Linux (for QR code scanning)
 
 ## Development
 
@@ -189,4 +200,3 @@ MIT License - See LICENSE file for details
 ## Contributing
 
 Pull requests are welcome! For major changes, please open an issue first to discuss what you would like to change.
-
