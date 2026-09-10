@@ -171,6 +171,13 @@ You can now distribute or run `EasyOTP.exe` on Windows without requiring Python 
 ## Requirements
 
 - Python 3.10 or 3.11
+- flet == 0.18.0
+- pyotp == 2.8.0
+- cryptography == 41.0.3
+- pyperclip == 1.8.2
+- pillow == 9.5.0
+- numpy < 2
+- opencv-python == 4.7.0.72
 - `libzbar0` on Linux (for QR code scanning)
 
 ## Development
