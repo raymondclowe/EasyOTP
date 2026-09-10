@@ -4,6 +4,7 @@ import pyperclip
 import time
 import threading
 import json
+import sys
 from typing import List, Optional, Tuple, Dict
 from pathlib import Path
 
@@ -1036,7 +1037,15 @@ class EasyOTPApp:
 
 def main():
     """Main entry point."""
-    ft.app(target=lambda page: EasyOTPApp(page))
+    if sys.platform.startswith("linux"):
+        ft.app(
+            target=lambda page: EasyOTPApp(page),
+            view=ft.AppView.WEB_BROWSER,
+            host="127.0.0.1",
+            port=8550,
+        )
+    else:
+        ft.app(target=lambda page: EasyOTPApp(page))
 
 
 if __name__ == "__main__":
