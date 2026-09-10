@@ -1042,7 +1042,6 @@ def main():
             target=lambda page: EasyOTPApp(page),
             view=ft.AppView.WEB_BROWSER,
             host="127.0.0.1",
-            port=8550,
         )
     else:
         ft.app(target=lambda page: EasyOTPApp(page))

@@ -53,7 +53,7 @@ uv run easyotp
   ```bash
   sudo apt install libzbar0
   ```
-- On Linux with `flet==0.18.0`, EasyOTP runs in browser view by default (`http://127.0.0.1:8550`).
+- On Linux with `flet==0.18.0`, EasyOTP runs in browser view by default and opens a local URL automatically.
 
 ### Using pip
 
