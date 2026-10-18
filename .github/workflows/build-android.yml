@@ -114,7 +114,7 @@ jobs:
           --build-number "${{ github.run_number }}" \
           --template-ref "${ANDROID_FLET_VERSION}" \
           --arch "$ANDROID_ARCH" \
-          --flutter-build-args "--target-platform=$FLUTTER_TARGET" \
+          --flutter-build-args="--target-platform=$FLUTTER_TARGET" \
           --module-name main \
           --output build/apk \
           --verbose
