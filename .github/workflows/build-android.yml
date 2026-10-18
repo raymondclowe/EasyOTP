@@ -114,7 +114,7 @@ jobs:
           --build-number "${{ github.run_number }}" \
           --template-ref "${ANDROID_FLET_VERSION}" \
           --arch "$ANDROID_ARCH" \
-          --flutter-build-args="--target-platform=$FLUTTER_TARGET" \
+          --flutter-build-args="--split-per-abi" \
           --module-name main \
           --output build/apk \
           --verbose
@@ -123,12 +123,16 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: EasyOTP-Android-${{ steps.get-version.outputs.version }}-${{ env.ANDROID_ARCH }}
-        path: build/apk/*.apk
+        path: |
+          build/apk/*${{ env.ANDROID_ARCH }}*.apk
+          build/apk/app-release.apk
 
     - name: Create Release
       if: startsWith(github.ref, 'refs/tags/v')
       uses: softprops/action-gh-release@v1
       with:
-        files: build/apk/*.apk
+        files: |
+          build/apk/*arm64-v8a*.apk
+          build/apk/*arm64*.apk
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
