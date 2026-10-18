@@ -56,6 +56,13 @@ def _copy_to_clipboard(text: str) -> bool:
         return False
 
 
+def _is_mobile(page) -> bool:
+    """True when the page runs on Android/iOS (no desktop window object)."""
+    platform = getattr(page, "platform", None)
+    name = getattr(platform, "name", None) or str(platform or "")
+    return name.strip().lower() in ("android", "ios")
+
+
 def _is_dark_mode(page: ft.Page) -> bool:
     """Check if current page theme mode is dark."""
     if page.theme_mode == ft.ThemeMode.DARK:
@@ -248,16 +255,21 @@ class EasyOTPApp:
         self.page = page
         self.page.title = "EasyOTP"
         
-        # Set minimum window size
-        self.page.window_min_width = MIN_WINDOW_WIDTH
-        self.page.window_min_height = MIN_WINDOW_HEIGHT
-        
-        # Load and apply window settings
-        self._load_window_settings()
-        
-        # Set up window resize and move handlers
-        self.page.on_resize = self._on_window_resize
-        self.page.on_window_event = self._on_window_event
+        # Desktop-only window configuration. flet 0.18 (desktop pin) exposes
+        # page.window_* directly; from 0.23 on those moved onto page.window,
+        # which does not exist on Android. Only run the legacy path when the
+        # page has no window object at all.
+        if not hasattr(page, "window") and not _is_mobile(page):
+            # Set minimum window size
+            self.page.window_min_width = MIN_WINDOW_WIDTH
+            self.page.window_min_height = MIN_WINDOW_HEIGHT
+            
+            # Load and apply window settings
+            self._load_window_settings()
+            
+            # Set up window resize and move handlers
+            self.page.on_resize = self._on_window_resize
+            self.page.on_window_event = self._on_window_event
         
         self.storage = Storage()
         self.items: List[OTPItem] = []
