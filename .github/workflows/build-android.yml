@@ -8,22 +8,18 @@ on:
   pull_request:
     branches: [ main ]
   workflow_dispatch:
-    inputs:
-      arch:
-        description: 'Target ABI (arm64-v8a for phones, x86_64 for emulator testing)'
-        required: false
-        default: 'arm64-v8a'
-        type: choice
-        options:
-          - arm64-v8a
-          - x86_64
-          - armeabi-v7a
 
 jobs:
   build-android:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        # arm64-v8a is what phones need; x86_64 is for emulator verification.
+        arch: [ arm64-v8a, x86_64 ]
 
     env:
       # Android builds need flet 0.25.x or newer: older Flet toolchains
@@ -41,8 +37,7 @@ jobs:
 
     - name: Resolve target ABI
       run: |
-        ARCH="${{ github.event.inputs.arch }}"
-        if [ -z "$ARCH" ]; then ARCH="arm64-v8a"; fi
+        ARCH="${{ matrix.arch }}"
         case "$ARCH" in
           arm64-v8a)   FLUTTER_TARGET="android-arm64" ;;
           armeabi-v7a) FLUTTER_TARGET="android-arm" ;;
