@@ -1,6 +1,16 @@
 """Main Flet UI application for EasyOTP."""
 import flet as ft
-import pyperclip
+
+try:
+    import pyperclip
+    PYPERCLIP_AVAILABLE = True
+except Exception:
+    # pyperclip raises at import time when the platform has no copy/paste
+    # mechanism (Android has none). Fall back to showing the text for
+    # manual/long-press copying instead of failing to start.
+    pyperclip = None
+    PYPERCLIP_AVAILABLE = False
+
 import time
 import threading
 import json
@@ -29,6 +39,28 @@ MAX_SCREEN_HEIGHT = 4000
 def _safe_strip(value: str) -> str:
     """Safely strip leading and trailing whitespace from a string value."""
     return value.strip() if value else ""
+
+
+def _copy_to_clipboard(text: str) -> bool:
+    """Copy text to the system clipboard.
+
+    Returns False when no clipboard backend exists (Android) so callers can
+    show the text for manual copying instead of claiming success.
+    """
+    if not PYPERCLIP_AVAILABLE:
+        return False
+    try:
+        pyperclip.copy(text)
+        return True
+    except Exception:
+        return False
+
+
+def _is_mobile(page) -> bool:
+    """True when the page runs on Android/iOS (no desktop window object)."""
+    platform = getattr(page, "platform", None)
+    name = getattr(platform, "name", None) or str(platform or "")
+    return name.strip().lower() in ("android", "ios")
 
 
 def _is_dark_mode(page: ft.Page) -> bool:
@@ -223,16 +255,21 @@ class EasyOTPApp:
         self.page = page
         self.page.title = "EasyOTP"
         
-        # Set minimum window size
-        self.page.window_min_width = MIN_WINDOW_WIDTH
-        self.page.window_min_height = MIN_WINDOW_HEIGHT
-        
-        # Load and apply window settings
-        self._load_window_settings()
-        
-        # Set up window resize and move handlers
-        self.page.on_resize = self._on_window_resize
-        self.page.on_window_event = self._on_window_event
+        # Desktop-only window configuration. flet 0.18 (desktop pin) exposes
+        # page.window_* directly; from 0.23 on those moved onto page.window,
+        # which does not exist on Android. Only run the legacy path when the
+        # page has no window object at all.
+        if not hasattr(page, "window") and not _is_mobile(page):
+            # Set minimum window size
+            self.page.window_min_width = MIN_WINDOW_WIDTH
+            self.page.window_min_height = MIN_WINDOW_HEIGHT
+            
+            # Load and apply window settings
+            self._load_window_settings()
+            
+            # Set up window resize and move handlers
+            self.page.on_resize = self._on_window_resize
+            self.page.on_window_event = self._on_window_event
         
         self.storage = Storage()
         self.items: List[OTPItem] = []
@@ -447,7 +484,7 @@ class EasyOTPApp:
     def _copy_code(self, list_item: OTPListItem):
         """Copy the OTP code to clipboard."""
         code = OTPGenerator.generate_code(list_item.otp_item.secret)
-        pyperclip.copy(code)
+        copied = _copy_to_clipboard(code)
         
         # Update selection
         for i, item in enumerate(self.list_items):
@@ -456,6 +493,11 @@ class EasyOTPApp:
                 item.set_selected(True)
             else:
                 item.set_selected(False)
+        
+        if not copied:
+            # No clipboard backend (e.g. Android): show the code for long-press copy.
+            self._show_manual_copy_dialog("One-time code", code)
+            return
         
         # Show snackbar with prominent styling
         self.page.snack_bar = ft.SnackBar(
@@ -733,9 +775,36 @@ class EasyOTPApp:
         dialog.open = True
         self.page.update()
     
+    def _show_manual_copy_dialog(self, title: str, value: str):
+        """Show a value in a dialog for manual (long-press) copying."""
+        dialog = ft.AlertDialog(
+            title=ft.Text(title),
+            content=ft.Column(
+                controls=[
+                    ft.Text(
+                        value,
+                        size=28,
+                        selectable=True,
+                        font_family="Courier New",
+                        weight=ft.FontWeight.BOLD,
+                    ),
+                    ft.Text("Long-press the value to copy it", size=12),
+                ],
+                tight=True,
+                spacing=10,
+            ),
+            actions=[ft.TextButton("Close", on_click=lambda _: self._close_dialog(dialog))],
+        )
+        self.page.dialog = dialog
+        dialog.open = True
+        self.page.update()
+
     def _copy_secret_to_clipboard(self, secret: str):
         """Copy secret to clipboard."""
-        pyperclip.copy(secret)
+        if not _copy_to_clipboard(secret):
+            # No clipboard backend (e.g. Android): show the secret instead.
+            self._show_manual_copy_dialog("Secret", secret)
+            return
         self.page.snack_bar = ft.SnackBar(
             content=ft.Row(
                 controls=[

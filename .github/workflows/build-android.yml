@@ -1,0 +1,155 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ main ]
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        # arm64-v8a is what phones need; x86_64 is for emulator verification.
+        arch: [ arm64-v8a, x86_64 ]
+
+    env:
+      # Android builds need flet 0.25.x or newer: older Flet toolchains
+      # (serious_python < 0.8) pip-install host wheels, and the Android wheel
+      # index (https://pypi.flet.dev) only exists from serious_python 0.8 on,
+      # which flet 0.25 was the first to use. The desktop pin in pyproject.toml
+      # stays untouched, so the app is staged into its own directory with
+      # Android-specific dependencies.
+      ANDROID_FLET_VERSION: '0.25.2'
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        distribution: temurin
+        java-version: '17'
+
+    - name: Set up Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: '3.24.5'
+        channel: stable
+        cache: true
+
+    - name: Accept Android SDK licenses
+      run: yes | flutter doctor --android-licenses || true
+
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install Flet CLI
+      run: |
+        python -m pip install --upgrade pip
+        python -m pip install \
+          "flet==${ANDROID_FLET_VERSION}" \
+          "flet-cli==${ANDROID_FLET_VERSION}" \
+          pyotp==2.8.0 \
+          cryptography==43.0.1 \
+          pillow==10.4.0
+
+    - name: Determine version
+      id: get-version
+      run: |
+        VERSION=$(python -c 'import tomllib; print(tomllib.load(open("pyproject.toml","rb"))["project"]["version"])')
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+    # A stable upload key is what lets a new APK install over the previous one
+    # instead of forcing an uninstall. The keystore is a base64 secret so the
+    # signing material never lives in the repo.
+    - name: Prepare release keystore
+      env:
+        KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      run: |
+        if [ -z "$KEYSTORE_BASE64" ]; then
+          echo "::error::ANDROID_KEYSTORE_BASE64 secret is not set"; exit 1
+        fi
+        echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/upload.jks"
+        echo "KEYSTORE_PATH=$RUNNER_TEMP/upload.jks" >> $GITHUB_ENV
+
+    - name: Stage Android app
+      run: |
+        APP_DIR="$RUNNER_TEMP/easyotp-android"
+        mkdir -p "$APP_DIR"
+        cp -r easyotp main.py "$APP_DIR/"
+        cat > "$APP_DIR/pyproject.toml" <<EOF
+        [project]
+        name = "easyotp"
+        version = "${{ steps.get-version.outputs.version }}"
+        description = "A simple TOTP application"
+        requires-python = ">=3.9"
+        dependencies = [
+            "flet==${ANDROID_FLET_VERSION}",
+            "pyotp==2.8.0",
+            "cryptography==43.0.1",
+            "pillow==10.4.0",
+        ]
+        EOF
+        echo "APP_DIR=$APP_DIR" >> $GITHUB_ENV
+
+    - name: Build APK
+      env:
+        KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      run: |
+        flet build apk "$APP_DIR" \
+          --project EasyOTP \
+          --org com.raymondclowe \
+          --build-version "${{ steps.get-version.outputs.version }}" \
+          --build-number "${{ github.run_number }}" \
+          --template-ref "${ANDROID_FLET_VERSION}" \
+          --arch "${{ matrix.arch }}" \
+          --module-name main \
+          --output build/apk \
+          --android-signing-key-store "$KEYSTORE_PATH" \
+          --android-signing-key-store-password "$KEYSTORE_PASSWORD" \
+          --android-signing-key-password "$KEYSTORE_PASSWORD" \
+          --android-signing-key-alias upload \
+          --verbose
+
+    # Name it the way it should read in a downloads folder.
+    - name: Rename APK
+      run: |
+        NAME="EasyOTP-${{ steps.get-version.outputs.version }}-build${{ github.run_number }}-${{ matrix.arch }}.apk"
+        mv build/apk/app-release.apk "build/apk/$NAME"
+        echo "APK_NAME=$NAME" >> $GITHUB_ENV
+        ls -lh "build/apk/$NAME"
+
+    - name: Verify signature
+      run: |
+        SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-$HOME/android-sdk}}"
+        APKSIGNER=$(find "$SDK_ROOT" -name apksigner -type f 2>/dev/null | sort -V | tail -1)
+        if [ -z "$APKSIGNER" ]; then
+          echo "::error::apksigner not found under $SDK_ROOT"; exit 1
+        fi
+        echo "apksigner: $APKSIGNER"
+        "$APKSIGNER" verify --print-certs "build/apk/$APK_NAME"
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: EasyOTP-Android-${{ steps.get-version.outputs.version }}-${{ matrix.arch }}
+        path: build/apk/*.apk
+
+    - name: Create Release
+      if: startsWith(github.ref, 'refs/tags/v')
+      uses: softprops/action-gh-release@v1
+      with:
+        files: build/apk/*.apk
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
