@@ -55,8 +55,8 @@ jobs:
           "flet==${ANDROID_FLET_VERSION}" \
           "flet-cli==${ANDROID_FLET_VERSION}" \
           pyotp==2.8.0 \
-          cryptography==41.0.3 \
-          pillow==9.5.0
+          cryptography==43.0.1 \
+          pillow==10.4.0
 
     - name: Determine version
       id: get-version
@@ -78,8 +78,8 @@ jobs:
         dependencies = [
             "flet==${ANDROID_FLET_VERSION}",
             "pyotp==2.8.0",
-            "cryptography==41.0.3",
-            "pillow==9.5.0",
+            "cryptography==43.0.1",
+            "pillow==10.4.0",
         ]
         EOF
         echo "APP_DIR=$APP_DIR" >> $GITHUB_ENV
