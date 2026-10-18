@@ -15,6 +15,15 @@ jobs:
     permissions:
       contents: write
 
+    env:
+      # Android builds need flet 0.25.x or newer: older Flet toolchains
+      # (serious_python < 0.8) pip-install host wheels, and the Android wheel
+      # index (https://pypi.flet.dev) only exists from serious_python 0.8 on,
+      # which flet 0.25 was the first to use. The desktop pin in pyproject.toml
+      # stays untouched, so the app is staged into its own directory with
+      # Android-specific dependencies.
+      ANDROID_FLET_VERSION: '0.25.2'
+
     steps:
     - uses: actions/checkout@v4
 
@@ -27,38 +36,65 @@ jobs:
     - name: Set up Flutter
       uses: subosito/flutter-action@v2
       with:
-        flutter-version: '3.19.6'
+        flutter-version: '3.24.5'
         channel: stable
         cache: true
 
     - name: Accept Android SDK licenses
       run: yes | flutter doctor --android-licenses || true
 
-    - name: Install uv
-      uses: astral-sh/setup-uv@v3
-
     - name: Set up Python 3.11
-      run: uv python install 3.11
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
 
-    - name: Install dependencies
-      run: uv sync --python 3.11
+    - name: Install Flet CLI
+      run: |
+        python -m pip install --upgrade pip
+        python -m pip install \
+          "flet==${ANDROID_FLET_VERSION}" \
+          "flet-cli==${ANDROID_FLET_VERSION}" \
+          pyotp==2.8.0 \
+          cryptography==41.0.3 \
+          pillow==9.5.0
 
     - name: Determine version
       id: get-version
       run: |
-        VERSION=$(uv run python -c 'import tomllib; print(tomllib.load(open("pyproject.toml","rb"))["project"]["version"])')
-        echo "VERSION=$VERSION" >> $GITHUB_ENV
+        VERSION=$(python -c 'import tomllib; print(tomllib.load(open("pyproject.toml","rb"))["project"]["version"])')
         echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+    - name: Stage Android app
+      run: |
+        APP_DIR="$RUNNER_TEMP/easyotp-android"
+        mkdir -p "$APP_DIR"
+        cp -r easyotp main.py "$APP_DIR/"
+        cat > "$APP_DIR/pyproject.toml" <<EOF
+        [project]
+        name = "easyotp"
+        version = "${{ steps.get-version.outputs.version }}"
+        description = "A simple TOTP application"
+        requires-python = ">=3.9"
+        dependencies = [
+            "flet==${ANDROID_FLET_VERSION}",
+            "pyotp==2.8.0",
+            "cryptography==41.0.3",
+            "pillow==9.5.0",
+        ]
+        EOF
+        echo "APP_DIR=$APP_DIR" >> $GITHUB_ENV
 
     - name: Build APK
       run: |
-        uv run flet build apk \
+        flet build apk "$APP_DIR" \
           --project EasyOTP \
           --org com.raymondclowe \
-          --build-version "$VERSION" \
+          --build-version "${{ steps.get-version.outputs.version }}" \
           --build-number "${{ github.run_number }}" \
-          --template-ref 0.19.0 \
+          --template-ref "${ANDROID_FLET_VERSION}" \
+          --arch arm64-v8a \
           --module-name main \
+          --output build/apk \
           --verbose
 
     - name: Upload artifact
