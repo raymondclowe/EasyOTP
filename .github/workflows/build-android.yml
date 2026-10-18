@@ -122,6 +122,31 @@ jobs:
           --android-signing-key-alias upload \
           --verbose
 
+    # Gradle packs jniLibs for every ABI the template lists, but the Python
+    # site-packages bundle only exists for the built arch, so the foreign
+    # ABIs are dead weight (and crash if installed). Drop them and re-sign.
+    - name: Strip foreign ABIs
+      env:
+        KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      run: |
+        SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-$HOME/android-sdk}}"
+        BT=$(dirname "$(find "$SDK_ROOT" -name apksigner -type f | sort -V | tail -1)")
+        KEEP="${{ matrix.arch }}"
+        STRIP=""
+        for abi in arm64-v8a armeabi-v7a x86_64; do
+          [ "$abi" = "$KEEP" ] || STRIP="$STRIP lib/$abi/*"
+        done
+        cd build/apk
+        cp app-release.apk stripped.apk
+        zip -q -d stripped.apk $STRIP
+        "$BT/zipalign" -f -p 4 stripped.apk aligned.apk
+        "$BT/apksigner" sign \
+          --ks "$KEYSTORE_PATH" --ks-key-alias upload \
+          --ks-pass "pass:$KEYSTORE_PASSWORD" --key-pass "pass:$KEYSTORE_PASSWORD" \
+          --out app-release.apk aligned.apk
+        rm -f stripped.apk aligned.apk
+        unzip -l app-release.apk | awk '{print $4}' | grep '^lib/' | cut -d/ -f2 | sort -u
+
     # Name it the way it should read in a downloads folder.
     - name: Rename APK
       run: |

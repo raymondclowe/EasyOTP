@@ -430,7 +430,12 @@ class EasyOTPApp:
             spacing=0
         )
         
-        self.page.add(content)
+        if _is_mobile(self.page):
+            # Android draws under the status bar; inset the UI so the search
+            # row and menu button are not clipped by it.
+            self.page.add(ft.SafeArea(content=content, expand=True))
+        else:
+            self.page.add(content)
     
     def _show_about_dialog(self, e=None):
         """Show About dialog with version and GitHub link."""
