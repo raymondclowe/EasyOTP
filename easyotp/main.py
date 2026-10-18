@@ -14,6 +14,8 @@ except Exception:
 import time
 import threading
 import json
+import os
+import traceback
 from typing import List, Optional, Tuple, Dict
 from pathlib import Path
 
@@ -23,8 +25,11 @@ from easyotp.qr_scanner import QRScanner
 from easyotp.qr_scanner import PYZBAR_AVAILABLE
 
 
-# Window settings file path
-WINDOW_SETTINGS_PATH = Path.home() / ".easyotp" / "window_settings.json"
+# Window settings file path (desktop only; Android has no writable ~)
+try:
+    WINDOW_SETTINGS_PATH = Path.home() / ".easyotp" / "window_settings.json"
+except Exception:
+    WINDOW_SETTINGS_PATH = Path(os.environ.get("TMPDIR", "/tmp")) / "window_settings.json"
 
 # Minimum window dimensions
 MIN_WINDOW_WIDTH = 400
@@ -302,8 +307,11 @@ class EasyOTPApp:
         self._load_items()
         self._start_timer_thread()
         
-        # Set up keyboard handler
-        self.page.on_keyboard_event = self._on_keyboard
+        # Set up keyboard handler (not available on every platform page)
+        try:
+            self.page.on_keyboard_event = self._on_keyboard
+        except Exception:
+            pass
     
     def _load_window_settings(self):
         """Load window position and size from settings file."""
@@ -1103,9 +1111,36 @@ class EasyOTPApp:
         thread.start()
 
 
+def _start_app(page):
+    """Build the app on a page; surface startup failures instead of a black screen."""
+    try:
+        EasyOTPApp(page)
+    except Exception:
+        tb = traceback.format_exc()
+        try:
+            print("EasyOTP startup failed:\n" + tb, flush=True)
+        except Exception:
+            pass
+        try:
+            page.bgcolor = ft.Colors.WHITE
+            page.add(
+                ft.Column(
+                    [
+                        ft.Text("EasyOTP failed to start", size=18, weight=ft.FontWeight.BOLD),
+                        ft.Text(tb, size=11, selectable=True),
+                    ],
+                    scroll=ft.ScrollMode.AUTO,
+                    expand=True,
+                )
+            )
+            page.update()
+        except Exception:
+            pass
+
+
 def main():
     """Main entry point."""
-    ft.app(target=lambda page: EasyOTPApp(page))
+    ft.app(target=_start_app)
 
 
 if __name__ == "__main__":

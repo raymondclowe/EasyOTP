@@ -4,6 +4,7 @@ import os
 import platform
 import subprocess
 import base64
+import tempfile
 from pathlib import Path
 from typing import List, Dict, Optional, Tuple
 from cryptography.fernet import Fernet
@@ -38,11 +39,40 @@ class OTPItem:
         )
 
 
+def _data_dir() -> Path:
+    """Return a writable directory for the encrypted vault.
+
+    Android has no usable ~ for the embedded interpreter (HOME is unset and
+    Path.home() resolves to an unwritable location), so every candidate is
+    probed by actually creating it before use.
+    """
+    candidates = []
+    home = os.environ.get("HOME")
+    if home:
+        candidates.append(Path(home) / ".easyotp")
+    try:
+        candidates.append(Path.home() / ".easyotp")
+    except Exception:
+        pass
+    candidates.append(Path.cwd() / ".easyotp")
+    candidates.append(Path(tempfile.gettempdir()) / "easyotp")
+    for path in candidates:
+        try:
+            path.mkdir(parents=True, exist_ok=True)
+            probe = path / ".writable"
+            probe.touch()
+            probe.unlink()
+            return path
+        except Exception:
+            continue
+    raise RuntimeError("no writable directory for the EasyOTP vault")
+
+
 class Storage:
     """Manages encrypted storage of OTP items."""
     
     def __init__(self):
-        self.storage_path = Path.home() / ".easyotp" / "secrets.enc"
+        self.storage_path = _data_dir() / "secrets.enc"
         self.storage_path.parent.mkdir(parents=True, exist_ok=True)
         self._encryption_key = self._get_encryption_key()
         self._fernet = Fernet(self._encryption_key)
