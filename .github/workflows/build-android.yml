@@ -132,8 +132,13 @@ jobs:
 
     - name: Verify signature
       run: |
-        APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner | sort -V | tail -1)
-        "$APKSIGNER" verify --print-certs "build/apk/$APK_NAME" | grep -E "Signer #1 certificate (DN|SHA-256)"
+        SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-$HOME/android-sdk}}"
+        APKSIGNER=$(find "$SDK_ROOT" -name apksigner -type f 2>/dev/null | sort -V | tail -1)
+        if [ -z "$APKSIGNER" ]; then
+          echo "::error::apksigner not found under $SDK_ROOT"; exit 1
+        fi
+        echo "apksigner: $APKSIGNER"
+        "$APKSIGNER" verify --print-certs "build/apk/$APK_NAME"
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4
